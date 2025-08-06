@@ -7,7 +7,7 @@ export const MPESA_EXTERNAL_CONFIG = {
 
   // API Key (opcional - se o servidor tiver autenticação)
   // Para usar sem autenticação, deixe undefined
-  apiKey: undefined, // ou process.env.VITE_MPESA_SERVER_API_KEY
+  apiKey: import.meta.env.VITE_MPESA_API_KEY || undefined,
 
   // ID do nosso projeto (para identificação no servidor)
   projectId: "reduza-pixel",
