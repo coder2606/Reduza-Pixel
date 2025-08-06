@@ -72,7 +72,7 @@ export const useAdminMetrics = () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-          console.log("Buscando transações do Supabase...");
+          
 
           // Forçar autenticação para garantir que temos uma sessão válida
           const {
@@ -95,7 +95,7 @@ export const useAdminMetrics = () => {
             throw error;
           }
 
-          console.log(`Transações encontradas: ${data?.length || 0}`);
+          
           return data || [];
         } catch (err) {
           if (retries > 0) {
@@ -115,7 +115,7 @@ export const useAdminMetrics = () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-          console.log("Buscando downloads do Supabase...");
+          
 
           // Usar uma consulta mais simples e direta
           const { data, error } = await supabase
@@ -129,7 +129,7 @@ export const useAdminMetrics = () => {
             throw error;
           }
 
-          console.log(`Downloads encontrados: ${data?.length || 0}`);
+          
           return data || [];
         } catch (err) {
           if (retries > 0) {
@@ -168,7 +168,7 @@ export const useAdminMetrics = () => {
 
         // Se ainda não tiver dados, usar dados de teste
         if (transactionData.length === 0) {
-          console.log("Usando dados de teste para transações");
+          
           // Criar alguns dados de teste para desenvolvimento
           const today = new Date();
           const yesterday = new Date(today);
@@ -232,7 +232,7 @@ export const useAdminMetrics = () => {
 
         // Se ainda não tiver dados, usar dados de teste
         if (downloadData.length === 0) {
-          console.log("Usando dados de teste para downloads");
+          
           // Criar alguns dados de teste para desenvolvimento
           const today = new Date();
 

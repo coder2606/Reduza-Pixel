@@ -3,9 +3,8 @@
  * Remove console.logs e outras informações sensíveis
  */
 
-const fs = require("fs");
-const path = require("path");
-const glob = require("glob");
+import fs from "fs";
+import path from "path";
 
 // Diretórios a serem processados
 const directories = ["./src"];
@@ -15,7 +14,7 @@ const extensions = [".ts", ".tsx", ".js", ".jsx"];
 
 // Padrões de código a serem removidos em produção
 const patterns = [
-  // Remover console.logs
+  // Remover console.logs (mantendo console.error)
   { regex: /console\.log\s*\(.*?\);?/g, replacement: "" },
   { regex: /console\.debug\s*\(.*?\);?/g, replacement: "" },
   { regex: /console\.info\s*\(.*?\);?/g, replacement: "" },
@@ -30,6 +29,29 @@ const patterns = [
   // Remover URLs de desenvolvimento
   { regex: /(http|https):\/\/localhost:[0-9]+/g, replacement: "" },
 ];
+
+// Função para obter arquivos recursivamente
+function getFilesRecursive(dir) {
+  const files = [];
+
+  function walkDir(currentPath) {
+    const items = fs.readdirSync(currentPath);
+
+    for (const item of items) {
+      const fullPath = path.join(currentPath, item);
+      const stat = fs.statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        walkDir(fullPath);
+      } else if (extensions.some((ext) => fullPath.endsWith(ext))) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walkDir(dir);
+  return files;
+}
 
 // Função para processar um arquivo
 function processFile(filePath) {
@@ -64,11 +86,8 @@ function main() {
 
   // Processar cada diretório
   directories.forEach((dir) => {
-    // Construir padrão glob para as extensões
-    const pattern = `${dir}/**/*{${extensions.join(",")}}`;
-
-    // Encontrar arquivos
-    const files = glob.sync(pattern);
+    // Encontrar arquivos recursivamente
+    const files = getFilesRecursive(dir);
 
     console.log(`📁 Processando ${files.length} arquivos em ${dir}...`);
 

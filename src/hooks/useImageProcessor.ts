@@ -25,18 +25,18 @@ export interface ProcessingOptions {
 export const useImageProcessor = () => {
   const [images, setImages] = useState<ImageFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentModal, setPaymentModal] = useState<{
-    isOpen: boolean;
-    imageHashes: string[];
-    imageCount: number;
-    paymentType: "individual" | "bulk";
-  } | null>(null);
+  const [loadingDownloads, setLoadingDownloads] = useState<Set<string>>(
+    new Set()
+  );
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   // Obter configurações do sistema
   const { config, getCurrentPricePerImage, getMaxImagesPerUpload } =
     useSystemConfig();
 
   const {
+    sessionId,
+    paymentModal,
     generateImageHash,
     isImagePaid,
     canDownloadWithoutPayment,
@@ -44,6 +44,7 @@ export const useImageProcessor = () => {
     openPaymentModal,
     closePaymentModal,
     setAutoDownloadCallback,
+    loadPaidImages,
   } = usePayment();
 
   const addImages = useCallback((files: File[]) => {
@@ -264,54 +265,66 @@ export const useImageProcessor = () => {
 
   const downloadImage = useCallback(
     async (imageFile: ImageFile, outputFormat?: string) => {
-      if (!imageFile.processedBlob) return;
+      if (!imageFile.processedBlob) {
+        toast.error("Erro ao baixar imagem. Tente processar novamente.");
+        return;
+      }
 
-      const imageHash = generateImageHash(imageFile);
+      // Marcar imagem como carregando
+      setLoadingDownloads((prev) => new Set(prev).add(imageFile.id));
 
-      // Verificar se a imagem já foi paga ou se o pagamento está desativado
-      if (isImagePaid(imageHash) || (config && !config.payment_enabled)) {
-        // Download direto (já pago)
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(imageFile.processedBlob);
+      try {
+        const imageHash = generateImageHash(imageFile);
 
-        // Determinar a extensão do arquivo baseado no formato de saída
-        const originalName = imageFile.file.name.split(".")[0];
-        let extension = "jpg";
+        // Verificar se a imagem já foi paga ou se o pagamento está desativado
+        const isPaymentDisabled = config && config.payment_enabled === false;
+        const isPaid = await isImagePaid(imageHash);
 
-        if (outputFormat === "webp") extension = "webp";
-        else if (outputFormat === "png") extension = "png";
-        else if (outputFormat === "jpeg") extension = "jpg";
-        else if (outputFormat === "original") {
-          extension = imageFile.file.name.split(".").pop() || "jpg";
+        if (isPaid || isPaymentDisabled) {
+          // Download direto (já pago ou pagamento desativado)
+          try {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(imageFile.processedBlob);
+
+            // Determinar a extensão do arquivo baseado no formato de saída
+            const originalName = imageFile.file.name.split(".")[0];
+            let extension = "jpg";
+
+            if (outputFormat === "webp") extension = "webp";
+            else if (outputFormat === "png") extension = "png";
+            else if (outputFormat === "jpeg") extension = "jpg";
+            else if (outputFormat === "original") {
+              extension = imageFile.file.name.split(".").pop() || "jpg";
+            }
+
+            const filename = `resized_${originalName}.${extension}`;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+            // Registrar download no histórico
+            await registerPaidDownload(imageHash, filename);
+            toast.success("Imagem baixada com sucesso!");
+          } catch (error) {
+            toast.error("Erro ao baixar imagem. Tente novamente.");
+          }
+        } else {
+          // Abrir modal de pagamento
+          openPaymentModal({
+            imageHashes: [imageHash],
+            imageCount: 1,
+            paymentType: "individual",
+            pricePerImage: getCurrentPricePerImage(),
+          });
         }
-
-        link.download = `resized_${originalName}.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-
-        // Registrar download
-        await registerPaidDownload(
-          imageHash,
-          `resized_${originalName}.${extension}`
-        );
-        toast.success("Imagem baixada!");
-      } else {
-        // Abrir modal de pagamento
-        setPaymentModal({
-          isOpen: true,
-          imageHashes: [imageHash],
-          imageCount: 1,
-          paymentType: "individual",
-        });
-
-        // Usar o hook de pagamento com o preço atual
-        openPaymentModal({
-          imageHashes: [imageHash],
-          imageCount: 1,
-          paymentType: "individual",
-          pricePerImage: getCurrentPricePerImage(),
+      } finally {
+        // Remover do estado de loading após processar
+        setLoadingDownloads((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(imageFile.id);
+          return newSet;
         });
       }
     },
@@ -326,7 +339,7 @@ export const useImageProcessor = () => {
   );
 
   const downloadAllImages = useCallback(
-    (outputFormat?: string) => {
+    async (outputFormat?: string) => {
       const completedImages = images.filter(
         (img) => img.status === "completed"
       );
@@ -336,42 +349,61 @@ export const useImageProcessor = () => {
         return;
       }
 
-      // Verificar quais imagens já foram pagas
-      const paidImages: ImageFile[] = [];
-      const unpaidImages: ImageFile[] = [];
+      try {
+        // Marcar como carregando todas as imagens
+        setIsDownloadingAll(true);
 
-      completedImages.forEach((img) => {
-        const imageHash = generateImageHash(img);
-        if (isImagePaid(imageHash)) {
-          paidImages.push(img);
-        } else {
-          unpaidImages.push(img);
+        // Verificar se o pagamento está desativado no sistema
+        const isPaymentDisabled = config && config.payment_enabled === false;
+
+        // Se pagamento estiver desativado, baixar todas diretamente
+        if (isPaymentDisabled) {
+          for (const img of completedImages) {
+            await downloadImage(img, outputFormat);
+          }
+          toast.success(`${completedImages.length} imagens baixadas!`);
+          return;
         }
-      });
 
-      // Se todas já foram pagas, baixar diretamente
-      if (unpaidImages.length === 0) {
-        paidImages.forEach((img) => downloadImage(img, outputFormat));
-        toast.success(`${paidImages.length} imagens baixadas!`);
-        return;
+        // Verificar quais imagens já foram pagas
+        const paidImages: ImageFile[] = [];
+        const unpaidImages: ImageFile[] = [];
+
+        // Garantir que as imagens pagas estejam atualizadas no cache local
+        await loadPaidImages();
+
+        for (const img of completedImages) {
+          const imageHash = generateImageHash(img);
+          const isPaid = await isImagePaid(imageHash);
+
+          if (isPaid) {
+            paidImages.push(img);
+          } else {
+            unpaidImages.push(img);
+          }
+        }
+
+        // Se todas já foram pagas, baixar diretamente
+        if (unpaidImages.length === 0) {
+          for (const img of paidImages) {
+            await downloadImage(img, outputFormat);
+          }
+          toast.success(`${paidImages.length} imagens baixadas!`);
+          return;
+        }
+
+        // Se há imagens não pagas, abrir modal de pagamento
+        const imageHashes = unpaidImages.map((img) => generateImageHash(img));
+
+        openPaymentModal({
+          imageHashes,
+          imageCount: unpaidImages.length,
+          paymentType: "bulk",
+          pricePerImage: getCurrentPricePerImage(),
+        });
+      } finally {
+        setIsDownloadingAll(false);
       }
-
-      // Se há imagens não pagas, abrir modal de pagamento
-      const imageHashes = unpaidImages.map((img) => generateImageHash(img));
-      setPaymentModal({
-        isOpen: true,
-        imageHashes,
-        imageCount: unpaidImages.length,
-        paymentType: "bulk",
-      });
-
-      // Usar o hook de pagamento com o preço atual
-      openPaymentModal({
-        imageHashes,
-        imageCount: unpaidImages.length,
-        paymentType: "bulk",
-        pricePerImage: getCurrentPricePerImage(),
-      });
     },
     [
       images,
@@ -380,6 +412,8 @@ export const useImageProcessor = () => {
       isImagePaid,
       openPaymentModal,
       getCurrentPricePerImage,
+      config,
+      loadPaidImages,
     ]
   );
 
@@ -403,41 +437,89 @@ export const useImageProcessor = () => {
   }, [images, getMaxImagesPerUpload]);
 
   // Função para lidar com sucesso do pagamento
-  const handlePaymentSuccess = useCallback(() => {
-    if (paymentModal) {
-      // Baixar as imagens que foram pagas
-      const completedImages = images.filter(
-        (img) => img.status === "completed"
-      );
-      const imageHashes = paymentModal.imageHashes;
+  const handlePaymentSuccess = useCallback(async () => {
+    // Recarregar imagens pagas do banco para garantir dados atualizados
+    await loadPaidImages();
 
-      completedImages.forEach((img) => {
-        const imageHash = generateImageHash(img);
-        if (imageHashes.includes(imageHash)) {
-          downloadImage(img);
-        }
-      });
+    // Baixar automaticamente as imagens que foram pagas
+    const completedImages = images.filter((img) => img.status === "completed");
 
-      setPaymentModal(null);
+    let downloadedCount = 0;
+
+    // Verificar quais imagens foram pagas e baixar
+    for (const img of completedImages) {
+      const imageHash = generateImageHash(img);
+
+      const isPaid = await isImagePaid(imageHash);
+      if (isPaid) {
+        await downloadImage(img);
+        downloadedCount++;
+      }
     }
-  }, [paymentModal, images, generateImageHash, downloadImage]);
+
+    if (downloadedCount > 0) {
+      toast.success(
+        `Pagamento realizado! ${downloadedCount} imagens baixadas automaticamente.`
+      );
+    } else {
+      toast.warning(
+        "Pagamento realizado, mas nenhuma imagem foi baixada automaticamente."
+      );
+    }
+  }, [images, generateImageHash, downloadImage, isImagePaid, loadPaidImages]);
 
   // ✅ Registrar callback de download automático
   useEffect(() => {
-    const autoDownload = (imageHashes: string[]) => {
-      console.log("🚀 Download automático iniciado para:", imageHashes);
+    const autoDownload = async (imageHashes: string[]) => {
+      // Garantir que as imagens pagas estejam atualizadas no cache local
+      await loadPaidImages();
 
-      imageHashes.forEach(async (hash) => {
+      let downloadedCount = 0;
+
+      for (const hash of imageHashes) {
+        // Verificar se o hash realmente existe nas imagens carregadas
         const image = images.find((img) => generateImageHash(img) === hash);
+
         if (image && image.status === "completed") {
-          console.log(`📥 Baixando automaticamente: ${image.file.name}`);
-          await downloadImage(image, "original"); // Usar formato original por padrão
+          // Verificar se a imagem está realmente paga no banco de dados
+          const isPaid = await isImagePaid(hash);
+
+          if (isPaid) {
+            try {
+              await downloadImage(image, "original"); // Usar formato original por padrão
+              downloadedCount++;
+            } catch (error) {
+              console.error(`❌ Erro ao baixar ${image.file.name}:`, error);
+              toast.error(`Erro ao baixar ${image.file.name}`);
+            }
+          } else {
+            console.warn(
+              `⚠️ Tentativa de download automático de imagem não paga: ${hash}`
+            );
+          }
+        } else {
+          console.warn(
+            `⚠️ Imagem com hash ${hash} não encontrada ou não processada`
+          );
         }
-      });
+      }
+
+      if (downloadedCount > 0) {
+        toast.success(`${downloadedCount} downloads automáticos concluídos!`);
+      } else {
+        toast.warning("Nenhuma imagem foi baixada automaticamente.");
+      }
     };
 
     setAutoDownloadCallback(() => autoDownload);
-  }, [images, downloadImage, generateImageHash, setAutoDownloadCallback]);
+  }, [
+    images,
+    downloadImage,
+    generateImageHash,
+    setAutoDownloadCallback,
+    loadPaidImages,
+    isImagePaid,
+  ]);
 
   return {
     images,
@@ -450,6 +532,8 @@ export const useImageProcessor = () => {
     clearAll,
     paymentModal,
     handlePaymentSuccess,
-    closePaymentModal: () => setPaymentModal(null),
+    closePaymentModal,
+    loadingDownloads,
+    isDownloadingAll,
   };
 };

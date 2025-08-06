@@ -151,7 +151,7 @@ export const useTwoFactorAuth = () => {
         const cleanedCode = code.replace(/\D/g, "");
 
         if (cleanedCode.length !== 6) {
-          console.log("Código deve ter 6 dígitos");
+          
           return false;
         }
 
@@ -168,7 +168,7 @@ export const useTwoFactorAuth = () => {
           secret: state.secret,
         });
 
-        console.log("Resultado da verificação:", isValid);
+        
 
         if (!isValid) return false;
 

@@ -37,9 +37,9 @@ export const useMPesaPayment = () => {
     setError(null);
 
     try {
-      console.log("🎯 Iniciando pagamento M-Pesa via servidor externo...");
-      console.log("📍 Servidor:", MPESA_EXTERNAL_CONFIG.serverUrl);
-      console.log("📊 Dados do pagamento:", paymentData);
+      
+      
+      
 
       // Gerar referência única se não fornecida (máximo 20 caracteres)
       const reference =
@@ -63,7 +63,7 @@ export const useMPesaPayment = () => {
         throw new Error(result.error || "Falha no processamento do pagamento");
       }
 
-      console.log("🎉 Pagamento processado com sucesso!", result);
+      
       return result;
     } catch (err) {
       const errorMessage =
@@ -81,9 +81,9 @@ export const useMPesaPayment = () => {
    */
   const checkServerHealth = async () => {
     try {
-      console.log("🏥 Verificando saúde do servidor M-Pesa...");
+      
       const result = await mpesaService.healthCheck();
-      console.log("📊 Status do servidor:", result);
+      
       return result;
     } catch (err) {
       console.error("❌ Erro no health check:", err);

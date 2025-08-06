@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useMPesaPayment } from "./useMPesaPayment";
@@ -30,7 +30,17 @@ export const usePayment = () => {
     null
   );
   const [paidImages, setPaidImages] = useState<Set<string>>(new Set());
-  const [sessionId] = useState(() => generateSessionId());
+  // Usar sessionId persistente do localStorage ou gerar novo
+  const [sessionId] = useState(() => {
+    const savedSessionId = localStorage.getItem("reduza_pixel_session_id");
+    if (savedSessionId) {
+      return savedSessionId;
+    } else {
+      const newSessionId = generateSessionId();
+      localStorage.setItem("reduza_pixel_session_id", newSessionId);
+      return newSessionId;
+    }
+  });
   const [autoDownloadCallback, setAutoDownloadCallback] = useState<
     ((imageHashes: string[]) => void) | null
   >(null);
@@ -53,27 +63,6 @@ export const usePayment = () => {
     return btoa(content).replace(/[^a-zA-Z0-9]/g, "");
   }, []);
 
-  // Verificar se imagem já foi paga
-  const isImagePaid = useCallback(
-    (imageHash: string): boolean => {
-      return paidImages.has(imageHash);
-    },
-    [paidImages]
-  );
-
-  // Carregar imagens já pagas do localStorage
-  const loadPaidImages = useCallback(() => {
-    try {
-      const saved = localStorage.getItem(`paid_images_${sessionId}`);
-      if (saved) {
-        const paidHashes = JSON.parse(saved);
-        setPaidImages(new Set(paidHashes));
-      }
-    } catch (error) {
-      console.error("Erro ao carregar imagens pagas:", error);
-    }
-  }, [sessionId]);
-
   // Salvar imagens pagas no localStorage
   const savePaidImages = useCallback(
     (imageHashes: string[]) => {
@@ -92,6 +81,144 @@ export const usePayment = () => {
     [paidImages, sessionId]
   );
 
+  // Verificar se imagem já foi paga (verificação completa: cache local + banco de dados específico da sessão + banco de dados global)
+  const isImagePaid = useCallback(
+    async (imageHash: string): Promise<boolean> => {
+      try {
+        // Primeiro verificar no cache local para performance
+        if (paidImages.has(imageHash)) {
+          return true;
+        }
+
+        // Verificar no banco de dados para a sessão atual
+        const { data: sessionData, error: sessionError } = await supabase
+          .from("image_downloads")
+          .select("id")
+          .eq("image_hash", imageHash)
+          .eq("session_id", sessionId) // Verificar para a sessão atual
+          .not("transaction_id", "is", null)
+          .limit(1);
+
+        if (sessionError) {
+          console.error(
+            "Erro ao verificar imagem paga na sessão:",
+            sessionError
+          );
+          return false;
+        }
+
+        // Se encontrou na sessão atual
+        if (sessionData && sessionData.length > 0) {
+          // Adicionar ao cache local para futuras verificações
+          savePaidImages([imageHash]);
+          return true;
+        }
+
+        // Se não encontrou na sessão atual, verificar globalmente
+        const { data: globalData, error: globalError } = await supabase
+          .from("image_downloads")
+          .select("id")
+          .eq("image_hash", imageHash)
+          .not("transaction_id", "is", null)
+          .limit(1);
+
+        if (globalError) {
+          console.error(
+            "Erro ao verificar imagem paga globalmente:",
+            globalError
+          );
+          return false;
+        }
+
+        const isPaidGlobally = globalData && globalData.length > 0;
+
+        if (isPaidGlobally) {
+          // Criar um registro para a sessão atual para facilitar verificações futuras
+          try {
+            const { data: globalRecord } = await supabase
+              .from("image_downloads")
+              .select("transaction_id, original_filename")
+              .eq("image_hash", imageHash)
+              .not("transaction_id", "is", null)
+              .limit(1)
+              .single();
+
+            if (globalRecord) {
+              // Criar um registro para a sessão atual usando a mesma transaction_id
+              await supabase.from("image_downloads").insert({
+                session_id: sessionId,
+                transaction_id: globalRecord.transaction_id,
+                image_hash: imageHash,
+                original_filename:
+                  globalRecord.original_filename || `image_${imageHash}`,
+                download_count: 1,
+                first_downloaded_at: new Date().toISOString(),
+                last_downloaded_at: new Date().toISOString(),
+              });
+
+              // Registro local criado com sucesso
+            }
+          } catch (copyError) {
+            console.error(
+              "Erro ao criar registro local para imagem paga globalmente:",
+              copyError
+            );
+          }
+
+          // Adicionar ao cache local para futuras verificações
+          savePaidImages([imageHash]);
+          return true;
+        }
+
+        // Imagem não está paga
+        return false;
+      } catch (error) {
+        console.error("Erro ao verificar pagamento da imagem:", error);
+        return false;
+      }
+    },
+    [paidImages, savePaidImages, sessionId]
+  );
+
+  // Carregar imagens pagas do banco de dados e sincronizar com localStorage
+  const loadPaidImages = useCallback(async () => {
+    try {
+      // Carregar do banco de dados imagens com pagamento confirmado
+      // Usar session_id para garantir que apenas imagens desta sessão sejam carregadas
+      const { data: paidDownloads, error } = await supabase
+        .from("image_downloads")
+        .select("image_hash")
+        .eq("session_id", sessionId)
+        .not("transaction_id", "is", null);
+
+      if (error) {
+        console.error("Erro ao carregar imagens pagas do banco:", error);
+        return;
+      }
+
+      // Processar imagens pagas do banco de dados
+      if (paidDownloads && paidDownloads.length > 0) {
+        const dbPaidHashes = paidDownloads.map((d) => d.image_hash);
+        const uniqueHashes = [...new Set(dbPaidHashes)];
+
+        // Atualizar localStorage e estado com imagens do banco
+        localStorage.setItem(
+          `paid_images_${sessionId}`,
+          JSON.stringify(uniqueHashes)
+        );
+        setPaidImages(new Set(uniqueHashes));
+
+        // Imagens pagas carregadas com sucesso
+      } else {
+        // Limpar cache local se não houver imagens pagas no banco
+        setPaidImages(new Set());
+        localStorage.removeItem(`paid_images_${sessionId}`);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar imagens pagas:", error);
+    }
+  }, [sessionId]);
+
   // Processar pagamento M-Pesa usando servidor externo reutilizável
   // Servidor: https://mpesa-server-vercel.vercel.app/
   const processPayment = useCallback(
@@ -101,13 +228,7 @@ export const usePayment = () => {
       reference: string,
       thirdPartyReference: string
     ) => {
-      console.log("🚀 Processando pagamento via servidor M-Pesa externo...");
-      console.log("📊 Dados:", {
-        customerMsisdn,
-        amount,
-        reference,
-        thirdPartyReference,
-      });
+      // Processando pagamento via servidor M-Pesa externo
 
       try {
         // Usar servidor M-Pesa externo reutilizável
@@ -117,7 +238,7 @@ export const usePayment = () => {
           reference,
         });
 
-        console.log("✅ Resposta do servidor externo:", result);
+        // Resposta recebida do servidor externo
 
         // Retornar no formato esperado pelo código existente
         return {
@@ -242,7 +363,7 @@ export const usePayment = () => {
                 originalAmount: discountAmount > 0 ? originalAmount : undefined,
                 couponCode: data.couponCode,
               });
-              console.log("✅ Email de confirmação enviado para:", data.email);
+              // Email de confirmação enviado com sucesso
             }
 
             // Enviar email para o administrador (sempre)
@@ -256,7 +377,7 @@ export const usePayment = () => {
               originalAmount: discountAmount > 0 ? originalAmount : undefined,
               couponCode: data.couponCode,
             });
-            console.log("✅ Email de notificação enviado para o administrador");
+            // Email de notificação enviado para o administrador
           } catch (emailError) {
             // Não interromper o fluxo se o envio de email falhar
             console.error("❌ Erro ao enviar emails:", emailError);
@@ -265,9 +386,7 @@ export const usePayment = () => {
           // ✅ DOWNLOAD AUTOMÁTICO após pagamento bem-sucedido
           if (autoDownloadCallback) {
             try {
-              console.log(
-                "🚀 Iniciando download automático das imagens pagas..."
-              );
+              // Iniciando download automático das imagens pagas
               autoDownloadCallback(data.imageHashes);
               toast.success(
                 "Pagamento realizado com sucesso! Downloads iniciados automaticamente."
@@ -297,7 +416,7 @@ export const usePayment = () => {
         return false;
       }
     },
-    [sessionId, savePaidImages, processPayment]
+    [sessionId, savePaidImages, processPayment, autoDownloadCallback]
   );
 
   // Abrir modal de pagamento
@@ -332,8 +451,8 @@ export const usePayment = () => {
 
   // Verificar se pode baixar sem pagamento
   const canDownloadWithoutPayment = useCallback(
-    (imageHash: string): boolean => {
-      return isImagePaid(imageHash);
+    async (imageHash: string): Promise<boolean> => {
+      return await isImagePaid(imageHash);
     },
     [isImagePaid]
   );
@@ -342,22 +461,72 @@ export const usePayment = () => {
   const registerPaidDownload = useCallback(
     async (imageHash: string, filename: string) => {
       try {
-        // Atualizar contador de downloads
-        const { data: existing } = await supabase
+        // Verificar se existe registro de pagamento para esta imagem
+        // Não usar maybeSingle que causa erro quando há múltiplos registros
+        const { data: paidDownloads, error: paidCheckError } = await supabase
           .from("image_downloads")
-          .select("*")
-          .eq("session_id", sessionId)
+          .select("id, download_count")
           .eq("image_hash", imageHash)
-          .single();
+          .not("transaction_id", "is", null) // Apenas registros com transação
+          .order("last_downloaded_at", { ascending: false }) // Obter o mais recente
+          .limit(1);
 
-        if (existing) {
-          await supabase
+        if (paidCheckError) {
+          console.error("Erro ao verificar pagamento:", paidCheckError);
+          return;
+        }
+
+        // Se encontrou um registro pago, atualizar contagem
+        if (paidDownloads && paidDownloads.length > 0) {
+          const paidDownload = paidDownloads[0];
+          const { error: updateError } = await supabase
             .from("image_downloads")
             .update({
-              download_count: existing.download_count + 1,
+              download_count: (paidDownload.download_count || 0) + 1,
               last_downloaded_at: new Date().toISOString(),
             })
-            .eq("id", existing.id);
+            .eq("id", paidDownload.id);
+
+          if (updateError) {
+            console.error("Erro ao atualizar download:", updateError);
+          } else {
+            // Re-download registrado com sucesso
+          }
+          return;
+        }
+
+        // Verificar se há qualquer registro para essa imagem (gratuito)
+        const { data: existingDownloads, error: checkError } = await supabase
+          .from("image_downloads")
+          .select("id, download_count")
+          .eq("image_hash", imageHash)
+          .order("last_downloaded_at", { ascending: false })
+          .limit(1);
+
+        if (checkError) {
+          console.error("Erro ao verificar download existente:", checkError);
+          return;
+        }
+
+        if (existingDownloads && existingDownloads.length > 0) {
+          // Atualizar o registro existente
+          const existingDownload = existingDownloads[0];
+          const { error: updateError } = await supabase
+            .from("image_downloads")
+            .update({
+              download_count: (existingDownload.download_count || 0) + 1,
+              last_downloaded_at: new Date().toISOString(),
+            })
+            .eq("id", existingDownload.id);
+
+          if (updateError) {
+            console.error("Erro ao atualizar download:", updateError);
+          } else {
+            // Download não pago atualizado
+          }
+        } else {
+          // Nunca criar registros gratuitos automaticamente
+          // Tentativa de download sem registro de pagamento
         }
       } catch (error) {
         console.error("Erro ao registrar download:", error);
@@ -365,6 +534,51 @@ export const usePayment = () => {
     },
     [sessionId]
   );
+
+  // ✅ Carregar imagens pagas e limpar sessões antigas na inicialização
+  useEffect(() => {
+    const initializePaymentSystem = async () => {
+      // Carregar imagens pagas
+      await loadPaidImages();
+
+      // Limpar sessões antigas (mais de 30 dias)
+      try {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        // Verificar se a sessão atual tem mais de 30 dias
+        const sessionCreationString = localStorage.getItem(
+          "reduza_pixel_session_created_at"
+        );
+        if (sessionCreationString) {
+          const sessionCreation = new Date(sessionCreationString);
+          if (sessionCreation < thirtyDaysAgo) {
+            // Sessão atual expirada, criar nova
+            // Sessão atual expirada, criando nova
+            const newSessionId = generateSessionId();
+            localStorage.setItem("reduza_pixel_session_id", newSessionId);
+            localStorage.setItem(
+              "reduza_pixel_session_created_at",
+              new Date().toISOString()
+            );
+            // Recarregar a página para aplicar nova sessão
+            window.location.reload();
+            return;
+          }
+        } else {
+          // Não tem data de criação, registrar agora
+          localStorage.setItem(
+            "reduza_pixel_session_created_at",
+            new Date().toISOString()
+          );
+        }
+      } catch (error) {
+        console.error("Erro ao verificar idade da sessão:", error);
+      }
+    };
+
+    initializePaymentSystem();
+  }, [loadPaidImages]);
 
   return {
     sessionId,

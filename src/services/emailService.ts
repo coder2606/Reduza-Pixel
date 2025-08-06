@@ -18,12 +18,12 @@ interface EmailResponse {
 }
 
 // URL do servidor de email local
-const EMAIL_SERVER_URL = "http://localhost:3001";
+const EMAIL_SERVER_URL = "";
 
 // Função para testar conexão com servidor SMTP
 export const testEmailConnection = async (): Promise<EmailResponse> => {
   try {
-    console.log("🔧 Iniciando teste de conexão SMTP via servidor local...");
+    
 
     // Usar o servidor Express local
     const response = await fetch(`${EMAIL_SERVER_URL}/test-connection`, {
@@ -35,7 +35,7 @@ export const testEmailConnection = async (): Promise<EmailResponse> => {
     }
 
     const result = await response.json();
-    console.log("✅ Teste SMTP concluído:", result);
+    
 
     return {
       success: result.success,
@@ -56,7 +56,7 @@ export const sendPaymentConfirmation = async (
   paymentData: PaymentData
 ): Promise<EmailResponse> => {
   try {
-    console.log("📧 Enviando email de confirmação via servidor local...");
+    
 
     // Chamar servidor local de email
     const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
@@ -79,7 +79,7 @@ export const sendPaymentConfirmation = async (
     }
 
     const data = await response.json();
-    console.log("Email enviado com sucesso:", data);
+    
 
     // Registrar atividade de email
     await logEmailActivity("success", {
@@ -111,7 +111,7 @@ export const sendAdminPaymentNotification = async (
   try {
     const adminEmail = "kobedesigner7@gmail.com";
 
-    console.log("📧 Enviando notificação para admin via servidor local...");
+    
 
     // Chamar servidor local de email
     const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
@@ -134,7 +134,7 @@ export const sendAdminPaymentNotification = async (
     }
 
     const data = await response.json();
-    console.log("Notificação para admin enviada com sucesso:", data);
+    
 
     // Registrar atividade de email
     await logEmailActivity("success", {

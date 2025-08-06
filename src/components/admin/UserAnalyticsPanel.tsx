@@ -86,7 +86,7 @@ const UserAnalyticsPanel: React.FC = () => {
 
       if (error) throw error;
 
-      console.log("UserAnalyticsPanel - Transações carregadas:", transactions?.length || 0);
+      
 
       if (!transactions || transactions.length === 0) {
         setUserStats([]);

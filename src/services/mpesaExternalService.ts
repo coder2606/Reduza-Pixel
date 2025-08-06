@@ -48,25 +48,25 @@ class MPesaExternalService {
     // Remover todos os caracteres não numéricos
     const cleaned = msisdn.replace(/\D/g, "");
 
-    console.log("📞 Formatando número:", { original: msisdn, cleaned });
+    
 
     // Se já tem 258 no início e 12 dígitos total (258 + 9 dígitos)
     if (cleaned.startsWith("258") && cleaned.length === 12) {
-      console.log("📞 Número já formatado corretamente");
+      
       return cleaned;
     }
 
     // Se tem 9 dígitos e começa com 8 (ex: 857690235)
     if (cleaned.length === 9 && cleaned.startsWith("8")) {
       const formatted = "258" + cleaned;
-      console.log("📞 Adicionando código do país:", formatted);
+      
       return formatted;
     }
 
     // Se tem 11 dígitos e começa com 258 mas falta um dígito
     if (cleaned.length === 11 && cleaned.startsWith("258")) {
       const formatted = "258" + cleaned.substring(3);
-      console.log("📞 Corrigindo formato:", formatted);
+      
       return formatted;
     }
 
@@ -83,7 +83,7 @@ class MPesaExternalService {
       }
     }
 
-    console.log("📞 Retornando número limpo:", cleaned);
+    
     return cleaned;
   }
 
@@ -149,10 +149,10 @@ class MPesaExternalService {
         paymentData.customerMsisdn
       );
 
-      console.log("🚀 Enviando pagamento para servidor M-Pesa externo...");
-      console.log("📞 Número original:", paymentData.customerMsisdn);
-      console.log("📞 Número formatado:", formattedMsisdn);
-      console.log("💰 Valor:", paymentData.amount);
+      
+      
+      
+      
       console.log("📊 Dados:", {
         ...paymentData,
         customerMsisdn: formattedMsisdn,
@@ -168,7 +168,7 @@ class MPesaExternalService {
         }),
       });
 
-      console.log("📡 Status da resposta:", response.status);
+      
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -176,7 +176,7 @@ class MPesaExternalService {
 
       const result: MPesaResponse = await response.json();
 
-      console.log("✅ Resposta do servidor M-Pesa:", result);
+      
 
       return result;
     } catch (error) {

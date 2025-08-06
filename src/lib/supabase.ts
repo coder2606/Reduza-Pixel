@@ -14,10 +14,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-console.log("✅ Supabase configurado:", {
-  url: supabaseUrl,
-  keyLength: supabaseAnonKey.length,
-});
+// Supabase configurado com sucesso
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

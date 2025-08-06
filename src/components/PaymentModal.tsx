@@ -212,7 +212,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               originalAmount: originalPrice,
               couponCode: couponInfo.code,
             });
-            console.log("✅ Email de confirmação enviado para:", email);
+            
           }
 
           // Sempre enviar email para o administrador

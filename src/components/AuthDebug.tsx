@@ -13,7 +13,7 @@ export const AuthDebug: React.FC = () => {
     setResult(null);
 
     try {
-      console.log("🔍 Testando autenticação...");
+      
 
       // Testar configurações do cliente
       const clientInfo = {
@@ -52,7 +52,7 @@ export const AuthDebug: React.FC = () => {
         timestamp: new Date().toISOString(),
       };
 
-      console.log("🔍 Debug Info:", debugInfo);
+      
       setResult(debugInfo);
     } catch (error: any) {
       console.error("❌ Erro no teste:", error);

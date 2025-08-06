@@ -2,7 +2,7 @@
 import { supabase } from "../supabase";
 
 // URL do servidor Express M-Pesa
-const MPESA_EXPRESS_SERVER = "http://localhost:3001";
+const MPESA_EXPRESS_SERVER = "";
 
 // Interfaces para compatibilidade com o projeto Cheguei
 interface PaymentResponse {
@@ -53,7 +53,7 @@ class MPesaService {
     details?: any;
   }> {
     try {
-      console.log("🏥 Verificando saúde do servidor Express M-Pesa...");
+      
 
       const response = await fetch(`${MPESA_EXPRESS_SERVER}/api/mpesa/health`, {
         method: "GET",
@@ -67,7 +67,7 @@ class MPesaService {
       }
 
       const healthData = await response.json();
-      console.log("📊 Express Server health:", healthData);
+      
 
       return {
         healthy: true,
@@ -86,7 +86,7 @@ class MPesaService {
 
   // Verificar saúde de todos os serviços
   async checkServicesHealth(): Promise<ServiceStatus> {
-    console.log("🔍 [MPesaService] Verificando status dos serviços...");
+    
 
     try {
       // Verificar servidor Express
@@ -97,7 +97,7 @@ class MPesaService {
         activeService: "mpesa-express-server",
       };
 
-      console.log("📊 Status dos serviços M-Pesa:", this.serviceStatus);
+      
       return this.serviceStatus;
     } catch (error: any) {
       console.error("❌ Erro na verificação dos serviços:", error);
@@ -112,7 +112,7 @@ class MPesaService {
   // Obter configuração M-Pesa - igual ao projeto Cheguei
   async getMPesaConfig(): Promise<any> {
     try {
-      console.log("🔍 Buscando configuração M-Pesa...");
+      
 
       // CONFIGURAÇÃO PRODUÇÃO
       const config = {
@@ -145,10 +145,10 @@ class MPesaService {
     thirdPartyReference: string
   ): Promise<PaymentResponse> {
     try {
-      console.log("💳 Processando pagamento M-Pesa via servidor Express...");
-      console.log("📱 customerMsisdn:", customerMsisdn);
-      console.log("💰 Valor:", amount);
-      console.log("🔖 Referência:", reference);
+      
+      
+      
+      
 
       // Verificar se o servidor Express está funcionando
       if (!this.serviceStatus.expressServer.healthy) {
@@ -166,9 +166,9 @@ class MPesaService {
         thirdPartyReference,
       };
 
-      console.log("🔄 Chamando servidor Express M-Pesa...");
-      console.log("🌐 URL:", `${MPESA_EXPRESS_SERVER}/api/mpesa/payment`);
-      console.log("📊 Payload:", paymentData);
+      
+      
+      
 
       // Fazer requisição para o servidor Express
       const response = await fetch(
@@ -182,10 +182,10 @@ class MPesaService {
         }
       );
 
-      console.log("📡 Response status:", response.status);
+      
 
       const responseData = await response.json();
-      console.log("📊 Resposta do servidor Express:", responseData);
+      
 
       if (!response.ok) {
         throw new Error(
@@ -196,7 +196,7 @@ class MPesaService {
 
       // Log do resultado
       if (responseData.success) {
-        console.log("✅ Pagamento processado com sucesso via SDK oficial");
+        
       } else {
         console.error("❌ Pagamento falhou:", responseData.responseDesc);
       }
@@ -218,7 +218,7 @@ class MPesaService {
     thirdPartyReference: string
   ): Promise<any> {
     try {
-      console.log("🔍 Consultando status da transação via servidor Express...");
+      
 
       const response = await fetch(`${MPESA_EXPRESS_SERVER}/api/mpesa/status`, {
         method: "POST",
@@ -237,7 +237,7 @@ class MPesaService {
         throw new Error(responseData.error || `HTTP ${response.status}`);
       }
 
-      console.log("📡 Status da transação:", responseData.data);
+      
       return responseData.data;
     } catch (error: any) {
       console.error("❌ Erro ao consultar status:", error);
@@ -251,7 +251,7 @@ class MPesaService {
     thirdPartyReference: string
   ): Promise<any> {
     try {
-      console.log("👤 Consultando nome do cliente via servidor Express...");
+      
 
       const response = await fetch(
         `${MPESA_EXPRESS_SERVER}/api/mpesa/customer-name`,
@@ -273,7 +273,7 @@ class MPesaService {
         throw new Error(responseData.error || `HTTP ${response.status}`);
       }
 
-      console.log("📡 Nome do cliente:", responseData.data);
+      
       return responseData.data;
     } catch (error: any) {
       console.error("❌ Erro ao consultar nome:", error);

@@ -28,7 +28,7 @@ export const useExternalMPesa = (config: UseExternalMPesaConfig) => {
     setError(null);
 
     try {
-      console.log("🎯 Processando pagamento via servidor externo...");
+      
 
       const result = await mpesaService.processPayment({
         ...paymentData,
@@ -39,7 +39,7 @@ export const useExternalMPesa = (config: UseExternalMPesaConfig) => {
         throw new Error(result.error || "Falha no pagamento");
       }
 
-      console.log("🎉 Pagamento processado com sucesso!", result);
+      
       return result;
     } catch (err) {
       const errorMessage =

@@ -26,6 +26,8 @@ const Index = () => {
     paymentModal,
     handlePaymentSuccess,
     closePaymentModal,
+    loadingDownloads,
+    isDownloadingAll,
   } = useImageProcessor();
 
   const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>(
@@ -101,6 +103,8 @@ const Index = () => {
                     onDownloadAll={downloadAllImages}
                     onRemove={removeImage}
                     onClearAll={clearAll}
+                    loadingDownloads={loadingDownloads}
+                    isDownloadingAll={isDownloadingAll}
                   />
                 </div>
               )}
@@ -195,8 +199,8 @@ const Index = () => {
           onClose={closePaymentModal}
           onPaymentSuccess={handlePaymentSuccess}
           imageCount={paymentModal.imageCount}
-          totalAmount={paymentModal.imageCount * 1.0}
-          sessionId=""
+          totalAmount={paymentModal.totalAmount}
+          sessionId={paymentModal.sessionId}
           imageHashes={paymentModal.imageHashes}
           paymentType={paymentModal.paymentType}
         />

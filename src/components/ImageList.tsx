@@ -22,9 +22,11 @@ import { usePayment } from "@/hooks/usePayment";
 interface ImageListProps {
   images: ImageFile[];
   onDownload: (image: ImageFile) => void;
-  onDownloadAll: () => void;
+  onDownloadAll: () => Promise<void> | void;
   onRemove: (id: string) => void;
   onClearAll: () => void;
+  loadingDownloads?: Set<string>;
+  isDownloadingAll?: boolean;
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -58,14 +60,16 @@ const ImageCard: React.FC<{
   image: ImageFile;
   onDownload: () => void;
   onRemove: () => void;
-}> = ({ image, onDownload, onRemove }) => {
+  isDownloadLoading?: boolean;
+}> = ({ image, onDownload, onRemove, isDownloadLoading = false }) => {
   const compressionRatio = image.processedSize
     ? getCompressionRatio(image.originalSize, image.processedSize)
     : 0;
 
-  const { generateImageHash, isImagePaid } = usePayment();
+  const { generateImageHash, paidImages } = usePayment();
   const imageHash = generateImageHash(image);
-  const isPaid = isImagePaid(imageHash);
+  // Verificar no cache local para evitar chamadas assíncronas durante renderização
+  const isPaid = paidImages.has(imageHash);
 
   return (
     <Card className="gradient-secondary border-border/50 hover:border-primary/30 transition-all duration-300 group">
@@ -158,9 +162,19 @@ const ImageCard: React.FC<{
                 variant="accent"
                 size="sm"
                 className="w-full"
+                disabled={isDownloadLoading}
               >
-                <CheckCircle2 className="mr-2 w-4 h-4" />
-                Baixar (Pago)
+                {isDownloadLoading ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 w-4 h-4" />
+                    Baixar (Pago)
+                  </>
+                )}
               </Button>
             ) : (
               <Button
@@ -168,9 +182,19 @@ const ImageCard: React.FC<{
                 variant="default"
                 size="sm"
                 className="w-full"
+                disabled={isDownloadLoading}
               >
-                <CreditCard className="mr-2 w-4 h-4" />
-                Pagar e Baixar
+                {isDownloadLoading ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 w-4 h-4" />
+                    Pagar e Baixar
+                  </>
+                )}
               </Button>
             )}
             {isPaid && (
@@ -200,6 +224,8 @@ export const ImageList: React.FC<ImageListProps> = ({
   onDownloadAll,
   onRemove,
   onClearAll,
+  loadingDownloads = new Set(),
+  isDownloadingAll = false,
 }) => {
   const completedImages = images.filter((img) => img.status === "completed");
   const hasImages = images.length > 0;
@@ -226,9 +252,23 @@ export const ImageList: React.FC<ImageListProps> = ({
         </h3>
         <div className="flex gap-2">
           {completedImages.length > 0 && (
-            <Button onClick={onDownloadAll} variant="accent" size="sm">
-              <DownloadCloud className="mr-2 w-4 h-4" />
-              Baixar Todas ({completedImages.length})
+            <Button
+              onClick={() => onDownloadAll()}
+              variant="accent"
+              size="sm"
+              disabled={isDownloadingAll}
+            >
+              {isDownloadingAll ? (
+                <>
+                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <DownloadCloud className="mr-2 w-4 h-4" />
+                  Baixar Todas ({completedImages.length})
+                </>
+              )}
             </Button>
           )}
           <Button onClick={onClearAll} variant="outline" size="sm">
@@ -245,6 +285,7 @@ export const ImageList: React.FC<ImageListProps> = ({
             image={image}
             onDownload={() => onDownload(image)}
             onRemove={() => onRemove(image.id)}
+            isDownloadLoading={loadingDownloads.has(image.id)}
           />
         ))}
       </div>
