@@ -114,63 +114,7 @@ export const usePayment = () => {
           return true;
         }
 
-        // Se não encontrou na sessão atual, verificar globalmente
-        const { data: globalData, error: globalError } = await supabase
-          .from("image_downloads")
-          .select("id")
-          .eq("image_hash", imageHash)
-          .not("transaction_id", "is", null)
-          .limit(1);
-
-        if (globalError) {
-          console.error(
-            "Erro ao verificar imagem paga globalmente:",
-            globalError
-          );
-          return false;
-        }
-
-        const isPaidGlobally = globalData && globalData.length > 0;
-
-        if (isPaidGlobally) {
-          // Criar um registro para a sessão atual para facilitar verificações futuras
-          try {
-            const { data: globalRecord } = await supabase
-              .from("image_downloads")
-              .select("transaction_id, original_filename")
-              .eq("image_hash", imageHash)
-              .not("transaction_id", "is", null)
-              .limit(1)
-              .single();
-
-            if (globalRecord) {
-              // Criar um registro para a sessão atual usando a mesma transaction_id
-              await supabase.from("image_downloads").insert({
-                session_id: sessionId,
-                transaction_id: globalRecord.transaction_id,
-                image_hash: imageHash,
-                original_filename:
-                  globalRecord.original_filename || `image_${imageHash}`,
-                download_count: 1,
-                first_downloaded_at: new Date().toISOString(),
-                last_downloaded_at: new Date().toISOString(),
-              });
-
-              // Registro local criado com sucesso
-            }
-          } catch (copyError) {
-            console.error(
-              "Erro ao criar registro local para imagem paga globalmente:",
-              copyError
-            );
-          }
-
-          // Adicionar ao cache local para futuras verificações
-          savePaidImages([imageHash]);
-          return true;
-        }
-
-        // Imagem não está paga
+        // Imagem não está paga na sessão atual
         return false;
       } catch (error) {
         console.error("Erro ao verificar pagamento da imagem:", error);

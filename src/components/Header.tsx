@@ -29,7 +29,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-accent/10 border border-accent/20">
               <span className="text-sm font-medium text-accent">
-                1MZN/Foto - Pagamento Facil (M-pesa)
+                10MZN/Foto - Pagamento Facil (M-pesa)
               </span>
             </div>
           </div>
