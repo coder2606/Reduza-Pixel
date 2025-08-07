@@ -31,6 +31,11 @@ class MPesaExternalService {
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      Accept: "application/json",
+      Origin:
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://www.reduzapixel.online",
     };
 
     if (this.apiKey) {
@@ -48,25 +53,22 @@ class MPesaExternalService {
     // Remover todos os caracteres não numéricos
     const cleaned = msisdn.replace(/\D/g, "");
 
-    
-
     // Se já tem 258 no início e 12 dígitos total (258 + 9 dígitos)
     if (cleaned.startsWith("258") && cleaned.length === 12) {
-      
       return cleaned;
     }
 
     // Se tem 9 dígitos e começa com 8 (ex: 857690235)
     if (cleaned.length === 9 && cleaned.startsWith("8")) {
       const formatted = "258" + cleaned;
-      
+
       return formatted;
     }
 
     // Se tem 11 dígitos e começa com 258 mas falta um dígito
     if (cleaned.length === 11 && cleaned.startsWith("258")) {
       const formatted = "258" + cleaned.substring(3);
-      
+
       return formatted;
     }
 
@@ -83,7 +85,6 @@ class MPesaExternalService {
       }
     }
 
-    
     return cleaned;
   }
 
@@ -149,41 +150,71 @@ class MPesaExternalService {
         paymentData.customerMsisdn
       );
 
-      
-      
-      
-      
-      console.log("📊 Dados:", {
-        ...paymentData,
-        customerMsisdn: formattedMsisdn,
-      });
-
-      const response = await fetch(`${this.serverUrl}/api/mpesa/payment`, {
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify({
+      // Log apenas em desenvolvimento para debug
+      if (import.meta.env.DEV) {
+        console.log("📊 Dados M-Pesa:", {
           ...paymentData,
-          customerMsisdn: formattedMsisdn, // Usar número formatado
-          projectId: paymentData.projectId || "reduza-pixel", // ID do nosso projeto
-        }),
-      });
-
-      
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          customerMsisdn: formattedMsisdn,
+        });
       }
 
-      const result: MPesaResponse = await response.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 segundos
 
-      
+      try {
+        const response = await fetch(`${this.serverUrl}/api/mpesa/payment`, {
+          method: "POST",
+          mode: "cors",
+          credentials: "omit",
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            ...paymentData,
+            customerMsisdn: formattedMsisdn, // Usar número formatado
+            projectId: paymentData.projectId || "reduza-pixel", // ID do nosso projeto
+          }),
+          signal: controller.signal,
+        });
 
-      return result;
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result: MPesaResponse = await response.json();
+        return result;
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
     } catch (error) {
       console.error("❌ Erro na comunicação com servidor M-Pesa:", error);
+
+      let errorMessage = "Erro desconhecido";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Logs específicos para debug
+        if (error.name === "AbortError") {
+          console.error(
+            "🕐 Timeout: Servidor M-Pesa não respondeu em 45 segundos"
+          );
+          errorMessage =
+            "Timeout: Servidor M-Pesa não respondeu. Tente novamente.";
+        } else if (error.message.includes("CORS")) {
+          console.error("🚫 Erro CORS: Servidor M-Pesa bloqueou a requisição");
+          errorMessage =
+            "Erro de conexão com servidor de pagamento. Tente novamente.";
+        } else if (error.message.includes("Network")) {
+          console.error("🌐 Erro de rede: Problema de conectividade");
+          errorMessage =
+            "Erro de conexão. Verifique sua internet e tente novamente.";
+        }
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: errorMessage,
       };
     }
   }
@@ -196,20 +227,33 @@ class MPesaExternalService {
     thirdPartyReference: string
   ): Promise<MPesaResponse> {
     try {
-      const response = await fetch(`${this.serverUrl}/api/mpesa/status`, {
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          transactionId,
-          thirdPartyReference,
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      try {
+        const response = await fetch(`${this.serverUrl}/api/mpesa/status`, {
+          method: "POST",
+          mode: "cors",
+          credentials: "omit",
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            transactionId,
+            thirdPartyReference,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
-
-      return await response.json();
     } catch (error) {
       console.error("❌ Erro ao consultar status:", error);
       return {
@@ -225,22 +269,35 @@ class MPesaExternalService {
    */
   async getCustomerName(customerMsisdn: string): Promise<MPesaResponse> {
     try {
-      const response = await fetch(
-        `${this.serverUrl}/api/mpesa/customer-name`,
-        {
-          method: "POST",
-          headers: this.getHeaders(),
-          body: JSON.stringify({
-            customerMsisdn,
-          }),
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      try {
+        const response = await fetch(
+          `${this.serverUrl}/api/mpesa/customer-name`,
+          {
+            method: "POST",
+            mode: "cors",
+            credentials: "omit",
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+              customerMsisdn,
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return await response.json();
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
-
-      return await response.json();
     } catch (error) {
       console.error("❌ Erro ao consultar nome do cliente:", error);
       return {

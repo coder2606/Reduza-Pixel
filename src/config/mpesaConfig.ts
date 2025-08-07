@@ -18,7 +18,11 @@ export const MPESA_EXTERNAL_CONFIG = {
     referencePrefix: "RDP_", // Reduza Pixel
 
     // Timeout para requisições (em ms)
-    timeout: 30000, // 30 segundos
+    timeout: 45000, // 45 segundos para produção
+
+    // Configurações CORS para produção
+    corsMode: "cors",
+    credentials: "omit",
   },
 };
 
