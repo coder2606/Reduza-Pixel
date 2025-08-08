@@ -4,6 +4,7 @@ import { ImageUploader } from "@/components/ImageUploader";
 import { ProcessingSettings } from "@/components/ProcessingSettings";
 import { ImageList } from "@/components/ImageList";
 import { PaymentModal } from "@/components/PaymentModal";
+import MPesaTestDebug from "@/components/MPesaTestDebug";
 
 import {
   useImageProcessor,
@@ -162,6 +163,13 @@ const Index = () => {
           </div>
         </div>
       </main>
+
+      {/* Componente de Teste M-Pesa (temporário) */}
+      {import.meta.env.DEV && (
+        <section className="container mx-auto px-6 py-8">
+          <MPesaTestDebug />
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border/50 bg-gradient-secondary backdrop-blur-sm mt-16">
