@@ -1,9 +1,18 @@
 // 🔧 Configuração do servidor M-Pesa externo
 // URL do servidor reutilizável: https://mpesa-server-vercel.vercel.app/
 
+const isBrowser = typeof window !== "undefined";
+const isProdEnv =
+  import.meta.env.PROD ||
+  (isBrowser && /reduzapixel\.online$/.test(window.location.hostname));
+const devServerUrl =
+  import.meta.env.VITE_MPESA_BASE_URL ||
+  "https://mpesa-server-vercel.vercel.app";
+
 export const MPESA_EXTERNAL_CONFIG = {
   // URL do servidor M-Pesa reutilizável
-  serverUrl: "https://mpesa-server-vercel.vercel.app",
+  // Em produção usamos caminho relativo para acionar o proxy do Vercel e evitar CORS
+  serverUrl: isProdEnv ? "" : devServerUrl,
 
   // API Key (opcional - se o servidor tiver autenticação)
   // Para usar sem autenticação, deixe undefined

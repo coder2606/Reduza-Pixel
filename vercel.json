@@ -1,5 +1,15 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    {
+      "source": "/api/mpesa/:path*",
+      "destination": "https://mpesa-server-vercel.vercel.app/api/mpesa/:path*"
+    },
+    {
+      "source": "/api/health",
+      "destination": "https://mpesa-server-vercel.vercel.app/api/health"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
