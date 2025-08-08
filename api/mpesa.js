@@ -8,29 +8,34 @@ const MPesaSDK = require("mpesa-sdk");
 const MPesa = MPesaSDK.default || MPesaSDK;
 
 // ✅ CREDENCIAIS REAIS FORNECIDAS PELO USUÁRIO
+// IMPORTANTE: Em produção Vercel, usar variáveis sem prefixo VITE_
 const MPESA_CONFIG = {
-  mode: process.env.NODE_ENV === "production" ? "production" : "production",
-  apiKey: process.env.VITE_MPESA_API_KEY || "bd6bzqqcaxtwxb7h002znntya8qlitx2",
-  publicKey:
-    process.env.VITE_MPESA_PUBLIC_KEY ||
-    "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAyrOP7fgXIJgJyp6nP/Vtlu8kW94Qu+gJjfMaTNOSd/mQJChqXiMWsZPH8uOoZGeR/9m7Y8vAU83D96usXUaKoDYiVmxoMBkfmw8DJAtHHt/8LWDdoAS/kpXyZJ5dt19Pv+rTApcjg7AoGczT+yIU7xp4Ku23EqQz70V5Rud+Qgerf6So28Pt3qZ9hxgUA6lgF7OjoYOIAKPqg07pHp2eOp4P6oQW8oXsS+cQkaPVo3nM1f+fctFGQtgLJ0y5VG61ZiWWWFMOjYFkBSbNOyJpQVcMKPcfdDRKq+9r5DFLtFGztPYIAovBm3a1Q6XYDkGYZWtnD8mDJxgEiHWCzog0wZqJtfNREnLf1g2ZOanTDcrEFzsnP2MQwIatV8M6q/fYrh5WejlNm4ujnKUVbnPMYH0wcbXQifSDhg2jcnRLHh9CF9iabkxAzjbYkaG1qa4zG+bCidLCRe0cEQvt0+/lQ40yESvpWF60omTy1dLSd10gl2//0v4IMjLMn9tgxhPp9c+C2Aw7x2Yjx3GquSYhU6IL41lrURwDuCQpg3F30QwIHgy1D8xIfQzno3XywiiUvoq4YfCkN9WiyKz0btD6ZX02RRK6DrXTFefeKjWf0RHREHlfwkhesZ4X168Lxe9iCWjP2d0xUB+lr10835ZUpYYIr4Gon9NTjkoOGwFyS5ECAwEAAQ==",
+  mode: "production", // Sempre usar produção para APIs reais
+  apiKey: process.env.MPESA_API_KEY || process.env.VITE_MPESA_API_KEY || "bd6bzqqcaxtwxb7h002znntya8qlitx2",
+  publicKey: process.env.MPESA_PUBLIC_KEY || process.env.VITE_MPESA_PUBLIC_KEY || "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAyrOP7fgXIJgJyp6nP/Vtlu8kW94Qu+gJjfMaTNOSd/mQJChqXiMWsZPH8uOoZGeR/9m7Y8vAU83D96usXUaKoDYiVmxoMBkfmw8DJAtHHt/8LWDdoAS/kpXyZJ5dt19Pv+rTApcjg7AoGczT+yIU7xp4Ku23EqQz70V5Rud+Qgerf6So28Pt3qZ9hxgUA6lgF7OjoYOIAKPqg07pHp2eOp4P6oQW8oXsS+cQkaPVo3nM1f+fctFGQtgLJ0y5VG61ZiWWWFMOjYFkBSbNOyJpQVcMKPcfdDRKq+9r5DFLtFGztPYIAovBm3a1Q6XYDkGYZWtnD8mDJxgEiHWCzog0wZqJtfNREnLf1g2ZOanTDcrEFzsnP2MQwIatV8M6q/fYrh5WejlNm4ujnKUVbnPMYH0wcbXQifSDhg2jcnRLHh9CF9iabkxAzjbYkaG1qa4zG+bCidLCRe0cEQvt0+/lQ40yESvpWF60omTy1dLSd10gl2//0v4IMjLMn9tgxhPp9c+C2Aw7x2Yjx3GquSYhU6IL41lrURwDuCQpg3F30QwIHgy1D8xIfQzno3XywiiUvoq4YfCkN9WiyKz0btD6ZX02RRK6DrXTFefeKjWf0RHREHlfwkhesZ4X168Lxe9iCWjP2d0xUB+lr10835ZUpYYIr4Gon9NTjkoOGwFyS5ECAwEAAQ==",
   origin: process.env.MPESA_ORIGIN || "developer.mpesa.vm.co.mz",
-  serviceProviderCode: process.env.VITE_MPESA_SERVICE_PROVIDER_CODE || "901796",
+  serviceProviderCode: process.env.MPESA_SERVICE_PROVIDER_CODE || process.env.VITE_MPESA_SERVICE_PROVIDER_CODE || "901796",
 };
 
 // Validação de configuração
 const missingVars = [];
-if (!MPESA_CONFIG.apiKey) missingVars.push("VITE_MPESA_API_KEY");
-if (!MPESA_CONFIG.publicKey) missingVars.push("VITE_MPESA_PUBLIC_KEY");
-if (!MPESA_CONFIG.serviceProviderCode)
-  missingVars.push("VITE_MPESA_SERVICE_PROVIDER_CODE");
+if (!MPESA_CONFIG.apiKey) missingVars.push("MPESA_API_KEY/VITE_MPESA_API_KEY");
+if (!MPESA_CONFIG.publicKey) missingVars.push("MPESA_PUBLIC_KEY/VITE_MPESA_PUBLIC_KEY");
+if (!MPESA_CONFIG.serviceProviderCode) missingVars.push("MPESA_SERVICE_PROVIDER_CODE/VITE_MPESA_SERVICE_PROVIDER_CODE");
 
 if (missingVars.length > 0) {
-  console.warn(
-    "⚠️ AVISO: Variáveis M-Pesa não configuradas:",
-    missingVars.join(", ")
-  );
+  console.warn("⚠️ AVISO: Variáveis M-Pesa não configuradas:", missingVars.join(", "));
 }
+
+// Log de configuração em produção para debug
+console.log("🔧 M-Pesa Config Status:", {
+  hasApiKey: !!MPESA_CONFIG.apiKey,
+  hasPublicKey: !!MPESA_CONFIG.publicKey,
+  hasServiceProvider: !!MPESA_CONFIG.serviceProviderCode,
+  mode: MPESA_CONFIG.mode,
+  origin: MPESA_CONFIG.origin,
+  timestamp: new Date().toISOString(),
+});
 
 // Inicializar SDK M-Pesa (lazy loading para serverless)
 let mpesa = null;
@@ -68,24 +73,26 @@ const parseBody = async (req) => {
 
 // Handler principal para Vercel - Serverless Function
 module.exports = async (req, res) => {
+  console.log("🚀 M-Pesa API Handler iniciado:", {
+    method: req.method,
+    url: req.url,
+    timestamp: new Date().toISOString(),
+  });
+
   try {
     // Headers CORS (sem necessidade de CORS complexo - same origin)
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization"
-    );
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     // Handle preflight OPTIONS
     if (req.method === "OPTIONS") {
+      console.log("✅ OPTIONS request handled");
       return res.status(200).end();
     }
 
     const { url, method } = req;
-    console.log(
-      `🚀 M-Pesa API Interna: ${method} ${url} - ${new Date().toISOString()}`
-    );
+    console.log(`📡 Processing: ${method} ${url} - ${new Date().toISOString()}`);
 
     // Parse body para POST requests
     const body = await parseBody(req);
@@ -93,27 +100,38 @@ module.exports = async (req, res) => {
     // 🩺 Health check endpoint
     if (url === "/api/mpesa" && method === "GET") {
       try {
+        console.log("🏥 Health check solicitado");
         const mpesaInstance = initializeMPesa();
-        return res.status(200).json({
+        const healthData = {
           status: "healthy",
           service: "mpesa-internal-api",
           timestamp: new Date().toISOString(),
           platform: "vercel-serverless",
           project: "reduza-pixel",
+          environment: {
+            nodeVersion: process.version,
+            platform: process.platform,
+            vercelRegion: process.env.VERCEL_REGION || "unknown",
+          },
           mpesa: {
             sdkInitialized: !!mpesaInstance,
             hasApiKey: !!MPESA_CONFIG.apiKey,
             hasPublicKey: !!MPESA_CONFIG.publicKey,
             hasServiceProvider: !!MPESA_CONFIG.serviceProviderCode,
             mode: MPESA_CONFIG.mode,
+            origin: MPESA_CONFIG.origin,
           },
-        });
+          config: MPESA_CONFIG,
+        };
+        console.log("✅ Health check response:", healthData);
+        return res.status(200).json(healthData);
       } catch (error) {
         console.error("❌ Erro no health check:", error.message);
         return res.status(500).json({
           status: "error",
           error: error.message,
           service: "mpesa-internal-api",
+          timestamp: new Date().toISOString(),
         });
       }
     }
@@ -309,13 +327,28 @@ module.exports = async (req, res) => {
       service: "mpesa-internal-api",
     });
   } catch (error) {
-    console.error("❌ Erro geral na API M-Pesa:", error.message);
-    return res.status(500).json({
-      success: false,
-      error: "Erro interno do servidor",
+    console.error("❌ Erro geral na API M-Pesa:", {
       message: error.message,
-      service: "mpesa-internal-api",
+      stack: error.stack,
+      url: req.url,
+      method: req.method,
       timestamp: new Date().toISOString(),
     });
+    
+    // Garantir que sempre retornamos uma resposta para evitar timeout
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        error: "Erro interno do servidor M-Pesa",
+        message: error.message,
+        service: "mpesa-internal-api",
+        timestamp: new Date().toISOString(),
+        debug: {
+          url: req.url,
+          method: req.method,
+          hasBody: !!req.body,
+        },
+      });
+    }
   }
 };

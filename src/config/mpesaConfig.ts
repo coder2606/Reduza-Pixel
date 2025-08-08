@@ -31,13 +31,17 @@ if (!MPESA_EXTERNAL_CONFIG.serverUrl) {
   console.error("❌ ERRO: URL do servidor M-Pesa não configurada");
 }
 
-// Log da configuração (apenas em desenvolvimento)
-if (import.meta.env.DEV) {
-  console.log("🔧 Configuração M-Pesa Externa:", {
-    serverUrl: MPESA_EXTERNAL_CONFIG.serverUrl,
-    projectId: MPESA_EXTERNAL_CONFIG.projectId,
-    hasApiKey: !!MPESA_EXTERNAL_CONFIG.apiKey,
-  });
-}
+// NOTA: Este arquivo está obsoleto - usando API M-Pesa interna
+// Mantido apenas para compatibilidade com componentes legados
+// TODO: Remover quando todos os componentes migrarem para API interna
+
+// Log da configuração desabilitado - usando API interna
+// if (import.meta.env.DEV) {
+//   console.log("🔧 Configuração M-Pesa Externa:", {
+//     serverUrl: MPESA_EXTERNAL_CONFIG.serverUrl,
+//     projectId: MPESA_EXTERNAL_CONFIG.projectId,
+//     hasApiKey: !!MPESA_EXTERNAL_CONFIG.apiKey,
+//   });
+// }
 
 export default MPESA_EXTERNAL_CONFIG;
