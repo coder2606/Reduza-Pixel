@@ -150,6 +150,35 @@ export const sendAdminPaymentNotification = async (
   }
 };
 
+// Enviar email administrativo genérico (fallback ou erro de usuário)
+export const sendAdminGeneric = async (
+  subject: string,
+  html?: string,
+  text?: string
+): Promise<EmailResponse> => {
+  try {
+    const adminEmail = "kobedesigner7@gmail.com";
+    const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: adminEmail, subject, type: "custom", html, text }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Erro ao enviar email genérico:", errorData);
+      return { success: false, error: errorData };
+    }
+
+    await logEmailActivity("success", { recipient: adminEmail, type: "custom" });
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao enviar email genérico:", error);
+    await logEmailActivity("error", { error: String(error), recipient: "kobedesigner7@gmail.com", type: "custom" });
+    return { success: false, error };
+  }
+};
+
 // Função para registrar atividade de email no console (temporário)
 const logEmailActivity = async (
   status: "success" | "error",

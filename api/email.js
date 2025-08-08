@@ -4,7 +4,8 @@
 const nodemailer = require("nodemailer");
 
 // Transport SMTP (usa env com fallback nos valores existentes)
-const smtpUser = process.env.ZOHO_EMAIL_USER || "pagamentos@mpesa.kobedesigner7.com";
+const smtpUser =
+  process.env.ZOHO_EMAIL_USER || "pagamentos@mpesa.kobedesigner7.com";
 const smtpPass = process.env.ZOHO_EMAIL_PASSWORD || "WWDXJNnqgfta";
 
 const transporter = nodemailer.createTransport({
@@ -37,7 +38,9 @@ module.exports = async (req, res) => {
     if (url === "/api/test-connection" && method === "GET") {
       try {
         await transporter.verify();
-        return res.status(200).json({ success: true, message: "Conexão SMTP ok" });
+        return res
+          .status(200)
+          .json({ success: true, message: "Conexão SMTP ok" });
       } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
       }
@@ -58,10 +61,12 @@ module.exports = async (req, res) => {
         });
       });
 
-      const { to, subject, type, paymentData } = body;
+      const { to, subject, type, paymentData, html: customHTML, text: customText } = body;
 
       if (!to || !subject || !type) {
-        return res.status(400).json({ success: false, error: "Campos obrigatórios ausentes" });
+        return res
+          .status(400)
+          .json({ success: false, error: "Campos obrigatórios ausentes" });
       }
 
       let htmlContent = "";
@@ -74,12 +79,24 @@ module.exports = async (req, res) => {
             <p>Olá,</p>
             <p>Seu pagamento foi processado com sucesso. Abaixo estão os detalhes da sua transação:</p>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>ID da Transação:</strong> ${paymentData?.transactionId || "-"}</p>
+              <p><strong>ID da Transação:</strong> ${
+                paymentData?.transactionId || "-"
+              }</p>
               <p><strong>Data:</strong> ${paymentData?.date || "-"}</p>
-              <p><strong>Número de Telefone:</strong> ${paymentData?.phoneNumber || "-"}</p>
-              <p><strong>Quantidade de Imagens:</strong> ${paymentData?.imageCount || "-"}</p>
-              ${paymentData?.discountApplied ? `<p><strong>Valor Original:</strong> ${paymentData?.originalAmount} MZN</p><p><strong>Desconto Aplicado:</strong> ${paymentData?.discountApplied} MZN</p>` : ""}
-              <p><strong>Valor Total:</strong> ${paymentData?.amount || "-"} MZN</p>
+              <p><strong>Número de Telefone:</strong> ${
+                paymentData?.phoneNumber || "-"
+              }</p>
+              <p><strong>Quantidade de Imagens:</strong> ${
+                paymentData?.imageCount || "-"
+              }</p>
+              ${
+                paymentData?.discountApplied
+                  ? `<p><strong>Valor Original:</strong> ${paymentData?.originalAmount} MZN</p><p><strong>Desconto Aplicado:</strong> ${paymentData?.discountApplied} MZN</p>`
+                  : ""
+              }
+              <p><strong>Valor Total:</strong> ${
+                paymentData?.amount || "-"
+              } MZN</p>
             </div>
             <p>Obrigado por utilizar nossos serviços!</p>
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #777; font-size: 12px;">
@@ -95,16 +112,34 @@ module.exports = async (req, res) => {
             </div>
             <p>Uma nova transação foi processada com sucesso:</p>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>ID da Transação:</strong> ${paymentData?.transactionId || "-"}</p>
+              <p><strong>ID da Transação:</strong> ${
+                paymentData?.transactionId || "-"
+              }</p>
               <p><strong>Data:</strong> ${paymentData?.date || "-"}</p>
-              <p><strong>Número de Telefone:</strong> ${paymentData?.phoneNumber || "-"}</p>
-              <p><strong>Quantidade de Imagens:</strong> ${paymentData?.imageCount || "-"}</p>
-              ${paymentData?.couponCode ? `<p><strong>Cupom Utilizado:</strong> ${paymentData?.couponCode}</p>` : ""}
-              ${paymentData?.discountApplied ? `<p><strong>Valor Original:</strong> ${paymentData?.originalAmount} MZN</p><p><strong>Desconto Aplicado:</strong> ${paymentData?.discountApplied} MZN</p>` : ""}
-              <p><strong>Valor Total:</strong> ${paymentData?.amount || "-"} MZN</p>
+              <p><strong>Número de Telefone:</strong> ${
+                paymentData?.phoneNumber || "-"
+              }</p>
+              <p><strong>Quantidade de Imagens:</strong> ${
+                paymentData?.imageCount || "-"
+              }</p>
+              ${
+                paymentData?.couponCode
+                  ? `<p><strong>Cupom Utilizado:</strong> ${paymentData?.couponCode}</p>`
+                  : ""
+              }
+              ${
+                paymentData?.discountApplied
+                  ? `<p><strong>Valor Original:</strong> ${paymentData?.originalAmount} MZN</p><p><strong>Desconto Aplicado:</strong> ${paymentData?.discountApplied} MZN</p>`
+                  : ""
+              }
+              <p><strong>Valor Total:</strong> ${
+                paymentData?.amount || "-"
+              } MZN</p>
             </div>
             <p>Acesse o painel administrativo para mais detalhes.</p>
           </div>`;
+      } else if (type === "custom") {
+        htmlContent = customHTML || `<p>${customText || "Mensagem"}</p>`;
       }
 
       const mailOptions = {
@@ -112,7 +147,7 @@ module.exports = async (req, res) => {
         to,
         subject,
         html: htmlContent,
-        text: `${subject}`,
+        text: customText || `${subject}`,
         headers: {
           "List-Unsubscribe": `<mailto:${smtpUser}?subject=unsubscribe>`,
           Precedence: "bulk",
@@ -123,7 +158,9 @@ module.exports = async (req, res) => {
       return res.status(200).json({ success: true, messageId: info.messageId });
     }
 
-    return res.status(404).json({ success: false, error: "Endpoint não encontrado" });
+    return res
+      .status(404)
+      .json({ success: false, error: "Endpoint não encontrado" });
   } catch (error) {
     console.error("❌ Erro geral na API Email:", error);
     if (!res.headersSent) {
@@ -131,5 +168,3 @@ module.exports = async (req, res) => {
     }
   }
 };
-
-

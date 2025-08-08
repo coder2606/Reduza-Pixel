@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useInternalMPesa } from "./useInternalMPesa";
+import { useExternalMPesa } from "./useExternalMPesa";
+import MPESA_EXTERNAL_CONFIG from "@/config/mpesaConfig";
+import { sendAdminGeneric } from "@/services/emailService";
 import {
   sendPaymentConfirmation,
   sendAdminPaymentNotification,
@@ -51,6 +54,12 @@ export const usePayment = () => {
     isLoading: mpesaLoading,
     error: mpesaError,
   } = useInternalMPesa();
+
+  // Hook do M-Pesa externo (fallback)
+  const { processPayment: processExternalPayment } = useExternalMPesa({
+    serverUrl: MPESA_EXTERNAL_CONFIG.serverUrl,
+    apiKey: MPESA_EXTERNAL_CONFIG.apiKey,
+  });
 
   // Gerar session ID único
   function generateSessionId(): string {
@@ -172,10 +181,8 @@ export const usePayment = () => {
       reference: string,
       thirdPartyReference: string
     ) => {
-      // Processando pagamento via API M-Pesa interna (sem problemas CORS!)
-
+      // 1) Tentar interno
       try {
-        // Usar API M-Pesa interna
         const result = await processInternalPayment({
           amount,
           customerMsisdn,
@@ -183,26 +190,80 @@ export const usePayment = () => {
           thirdPartyReference,
         });
 
-        // Resposta recebida da API interna
+        if (result.success) {
+          return {
+            success: true,
+            transactionId: result.transactionId,
+            conversationId: result.conversationId,
+            responseCode: result.responseCode,
+            responseDesc: result.responseDesc,
+          };
+        }
 
-        // Retornar no formato esperado pelo código existente
-        return {
-          success: result.success,
-          transactionId: result.transactionId,
-          conversationId: result.conversationId,
-          responseCode: result.responseCode,
-          responseDesc: result.responseDesc,
-          error: result.error,
-        };
-      } catch (error) {
-        console.error("❌ Erro no pagamento via API interna:", error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Erro desconhecido",
-        };
+        // 2) Fallback para externo se interno falhar
+        const fallback = await processExternalPayment({
+          amount,
+          customerMsisdn,
+          reference,
+          thirdPartyReference,
+        });
+
+        if (fallback.success) {
+          return {
+            success: true,
+            transactionId: fallback.transactionId,
+            conversationId: fallback.conversationId,
+            responseCode: fallback.responseCode,
+            responseDesc: fallback.responseDesc,
+          };
+        }
+
+        await sendAdminGeneric(
+          "Tentativa de Pagamento",
+          `<p>Informamos que o usuário <strong>${customerMsisdn}</strong> tentou fazer um pagamento, mas os servidores retornaram erros.</p>`
+        );
+        return { success: false, error: fallback.error || result.error };
+      } catch (err) {
+        // 3) Se interno lançar exceção, tentar externo
+        try {
+          const fallback = await processExternalPayment({
+            amount,
+            customerMsisdn,
+            reference,
+            thirdPartyReference,
+          });
+
+          if (fallback.success) {
+            return {
+              success: true,
+              transactionId: fallback.transactionId,
+              conversationId: fallback.conversationId,
+              responseCode: fallback.responseCode,
+              responseDesc: fallback.responseDesc,
+            };
+          }
+
+          await sendAdminGeneric(
+            "Tentativa de Pagamento",
+            `<p>Informamos que o usuário <strong>${customerMsisdn}</strong> tentou fazer um pagamento, mas os servidores retornaram erros.</p>`
+          );
+          return { success: false, error: fallback.error };
+        } catch (fallbackError) {
+          await sendAdminGeneric(
+            "Tentativa de Pagamento",
+            `<p>Informamos que o usuário <strong>${customerMsisdn}</strong> tentou fazer um pagamento, mas os servidores retornaram erros.</p>`
+          );
+          return {
+            success: false,
+            error:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : "Erro desconhecido",
+          };
+        }
       }
     },
-    [processInternalPayment]
+    [processInternalPayment, processExternalPayment]
   );
 
   // Iniciar pagamento
