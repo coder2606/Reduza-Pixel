@@ -150,13 +150,14 @@ class MPesaExternalService {
         paymentData.customerMsisdn
       );
 
-      // Log apenas em desenvolvimento para debug
-      if (import.meta.env.DEV) {
-        console.log("📊 Dados M-Pesa:", {
-          ...paymentData,
-          customerMsisdn: formattedMsisdn,
-        });
-      }
+      // Log para debug (sempre ativo para diagnóstico)
+      console.log("📊 M-Pesa Payment Request:", {
+        amount: paymentData.amount,
+        customerMsisdn: formattedMsisdn.substring(0, 6) + "xxx", // Mascarar número
+        reference: paymentData.reference,
+        serverUrl: this.serverUrl,
+        timestamp: new Date().toISOString(),
+      });
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 segundos
@@ -182,6 +183,16 @@ class MPesaExternalService {
         }
 
         const result: MPesaResponse = await response.json();
+
+        // Log da resposta (sempre ativo para diagnóstico)
+        console.log("📡 M-Pesa Server Response:", {
+          success: result.success,
+          responseCode: result.responseCode,
+          responseDesc: result.responseDesc,
+          hasTransactionId: !!result.transactionId,
+          timestamp: new Date().toISOString(),
+        });
+
         return result;
       } catch (fetchError) {
         clearTimeout(timeoutId);
@@ -197,18 +208,41 @@ class MPesaExternalService {
         // Logs específicos para debug
         if (error.name === "AbortError") {
           console.error(
-            "🕐 Timeout: Servidor M-Pesa não respondeu em 45 segundos"
+            "🕐 MPESA TIMEOUT: Servidor M-Pesa não respondeu em 45 segundos"
           );
           errorMessage =
             "Timeout: Servidor M-Pesa não respondeu. Tente novamente.";
-        } else if (error.message.includes("CORS")) {
-          console.error("🚫 Erro CORS: Servidor M-Pesa bloqueou a requisição");
+        } else if (
+          error.message.includes("CORS") ||
+          error.message.includes("blocked")
+        ) {
+          console.error(
+            "🚫 MPESA CORS ERROR: Servidor M-Pesa bloqueou a requisição",
+            {
+              error: error.message,
+              serverUrl: this.serverUrl,
+              userAgent: navigator.userAgent,
+              timestamp: new Date().toISOString(),
+            }
+          );
           errorMessage =
-            "Erro de conexão com servidor de pagamento. Tente novamente.";
-        } else if (error.message.includes("Network")) {
-          console.error("🌐 Erro de rede: Problema de conectividade");
+            "Erro CORS: Servidor de pagamento não permite requisições deste domínio.";
+        } else if (
+          error.message.includes("Network") ||
+          error.message.includes("Failed to fetch")
+        ) {
+          console.error("🌐 MPESA NETWORK ERROR: Problema de conectividade", {
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          });
           errorMessage =
             "Erro de conexão. Verifique sua internet e tente novamente.";
+        } else {
+          console.error("❓ MPESA UNKNOWN ERROR:", {
+            error: error.message,
+            name: error.name,
+            timestamp: new Date().toISOString(),
+          });
         }
       }
 
