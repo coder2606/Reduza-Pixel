@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🔬 Diagnóstico CORS M-Pesa</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+      }
+      .test-section {
+        background: #f5f5f5;
+        padding: 15px;
+        margin: 15px 0;
+        border-radius: 5px;
+      }
+      .result {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      .json-display {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔬 Diagnóstico CORS - Servidor M-Pesa</h1>
+    <p>
+      <strong>Objetivo:</strong> Identificar exatamente onde está falhando a
+      configuração CORS
+    </p>
+
+    <div class="test-section">
+      <h3>📊 Informações do Teste</h3>
+      <p><strong>Origin atual:</strong> <span id="currentOrigin"></span></p>
+      <p>
+        <strong>Servidor M-Pesa:</strong> https://mpesa-server-vercel.vercel.app
+      </p>
+      <p><strong>Endpoint diagnóstico:</strong> /api/cors-diagnostic</p>
+    </div>
+
+    <div class="test-section">
+      <h3>🧪 Testes de Diagnóstico</h3>
+      <button onclick="testCORSDiagnostic()">
+        🔬 Executar Diagnóstico Completo
+      </button>
+      <button onclick="testOfficialCors()">🔧 Teste CORS Oficial Vercel</button>
+      <button onclick="testSimpleGET()">📡 Teste GET Simples</button>
+      <button onclick="testOPTIONS()">⚙️ Teste OPTIONS Manual</button>
+      <button onclick="clearResults()">🧹 Limpar</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+      const SERVER_URL = "https://mpesa-server-vercel.vercel.app";
+      document.getElementById("currentOrigin").textContent =
+        window.location.origin;
+
+      function addResult(title, content, type = "info") {
+        const resultsDiv = document.getElementById("results");
+        const div = document.createElement("div");
+        div.innerHTML = `
+                <h4>${title}</h4>
+                <div class="result ${type}">${content}</div>
+            `;
+        resultsDiv.appendChild(div);
+      }
+
+      function displayJSON(obj) {
+        return `<div class="json-display">${JSON.stringify(
+          obj,
+          null,
+          2
+        )}</div>`;
+      }
+
+      async function testCORSDiagnostic() {
+        addResult(
+          "🔬 Iniciando Diagnóstico CORS Completo...",
+          "Testando endpoint /api/cors-diagnostic",
+          "info"
+        );
+
+        try {
+          // Teste do endpoint de diagnóstico
+          const response = await fetch(`${SERVER_URL}/api/cors-diagnostic`, {
+            method: "GET",
+            mode: "cors",
+            headers: {
+              Origin: window.location.origin,
+            },
+          });
+
+          addResult(
+            "📊 Status da Resposta",
+            `Status: ${response.status} ${response.statusText}`,
+            response.ok ? "success" : "error"
+          );
+
+          // Verificar headers da resposta
+          const corsHeaders = {
+            "Access-Control-Allow-Origin": response.headers.get(
+              "Access-Control-Allow-Origin"
+            ),
+            "Access-Control-Allow-Methods": response.headers.get(
+              "Access-Control-Allow-Methods"
+            ),
+            "Access-Control-Allow-Headers": response.headers.get(
+              "Access-Control-Allow-Headers"
+            ),
+            "X-Debug-Test": response.headers.get("X-Debug-Test"),
+          };
+
+          addResult(
+            "📤 Headers CORS Recebidos",
+            displayJSON(corsHeaders),
+            "info"
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            addResult("🔍 Dados do Diagnóstico", displayJSON(data), "success");
+
+            // Análise dos resultados
+            const analysis = analyzeResults(data, corsHeaders);
+            addResult(
+              "🎯 Análise dos Resultados",
+              analysis,
+              analysis.includes("✅") ? "success" : "error"
+            );
+          }
+        } catch (error) {
+          addResult(
+            "❌ Erro no Diagnóstico",
+            `Erro: ${error.message}`,
+            "error"
+          );
+        }
+      }
+
+      async function testBypassVercel() {
+        addResult(
+          "🚀 Teste BYPASS Vercel...",
+          "Testando endpoint com writeHead bypass",
+          "info"
+        );
+
+        try {
+          const response = await fetch(`${SERVER_URL}/api/cors-bypass-test`, {
+            method: "GET",
+            mode: "cors",
+          });
+
+          addResult(
+            "📊 Status BYPASS",
+            `Status: ${response.status} ${response.statusText}`,
+            response.ok ? "success" : "error"
+          );
+
+          // Verificar headers do bypass
+          const corsHeaders = {
+            "Access-Control-Allow-Origin": response.headers.get(
+              "Access-Control-Allow-Origin"
+            ),
+            "Access-Control-Allow-Methods": response.headers.get(
+              "Access-Control-Allow-Methods"
+            ),
+            "Access-Control-Allow-Headers": response.headers.get(
+              "Access-Control-Allow-Headers"
+            ),
+            "X-Bypass-Test": response.headers.get("X-Bypass-Test"),
+          };
+
+          addResult("🚀 Headers BYPASS", displayJSON(corsHeaders), "info");
+
+          if (response.ok) {
+            const data = await response.json();
+            addResult("📊 Dados BYPASS", displayJSON(data), "success");
+
+            // Verificar se o bypass funcionou
+            const bypassWorked =
+              corsHeaders["Access-Control-Allow-Origin"] === "*";
+            addResult(
+              "🎯 Resultado BYPASS",
+              bypassWorked
+                ? "✅ BYPASS FUNCIONOU! Headers CORS chegaram ao cliente!"
+                : "❌ BYPASS falhou - headers ainda sendo bloqueados",
+              bypassWorked ? "success" : "error"
+            );
+          }
+        } catch (error) {
+          addResult("❌ Erro no BYPASS", `Erro: ${error.message}`, "error");
+        }
+      }
+
+      async function testSimpleGET() {
+        addResult(
+          "📡 Teste GET Simples...",
+          "Testando requisição GET básica",
+          "info"
+        );
+
+        try {
+          const response = await fetch(`${SERVER_URL}/api/test`, {
+            method: "GET",
+            mode: "cors",
+          });
+
+          const corsOrigin = response.headers.get(
+            "Access-Control-Allow-Origin"
+          );
+          addResult(
+            "📡 Resultado GET Simples",
+            `Status: ${response.status}\nCORS Origin: ${corsOrigin || "null"}`,
+            response.ok ? "success" : "error"
+          );
+        } catch (error) {
+          addResult(
+            "❌ Erro no GET Simples",
+            `Erro: ${error.message}`,
+            "error"
+          );
+        }
+      }
+
+      async function testOPTIONS() {
+        addResult(
+          "⚙️ Teste OPTIONS Manual...",
+          "Testando requisição OPTIONS direta",
+          "info"
+        );
+
+        try {
+          const response = await fetch(`${SERVER_URL}/api/cors-diagnostic`, {
+            method: "OPTIONS",
+            mode: "cors",
+            headers: {
+              Origin: window.location.origin,
+              "Access-Control-Request-Method": "GET",
+            },
+          });
+
+          const corsHeaders = {
+            "Access-Control-Allow-Origin": response.headers.get(
+              "Access-Control-Allow-Origin"
+            ),
+            "Access-Control-Allow-Methods": response.headers.get(
+              "Access-Control-Allow-Methods"
+            ),
+            "Access-Control-Allow-Headers": response.headers.get(
+              "Access-Control-Allow-Headers"
+            ),
+          };
+
+          addResult(
+            "⚙️ Resultado OPTIONS",
+            `Status: ${response.status}\nHeaders: ${JSON.stringify(
+              corsHeaders,
+              null,
+              2
+            )}`,
+            response.ok ? "success" : "error"
+          );
+        } catch (error) {
+          addResult("❌ Erro no OPTIONS", `Erro: ${error.message}`, "error");
+        }
+      }
+
+      function analyzeResults(diagnosticData, receivedHeaders) {
+        let analysis = "🔍 ANÁLISE:\n\n";
+
+        // Verificar se headers foram aplicados no servidor
+        if (diagnosticData.headers && diagnosticData.headers.match) {
+          analysis +=
+            "✅ Headers foram aplicados corretamente no código do servidor\n";
+        } else {
+          analysis += "❌ Headers NÃO foram aplicados no código do servidor\n";
+        }
+
+        // Verificar se headers chegaram ao cliente
+        const hasOriginHeader =
+          receivedHeaders["Access-Control-Allow-Origin"] === "*";
+        if (hasOriginHeader) {
+          analysis +=
+            "✅ Header Access-Control-Allow-Origin chegou ao cliente\n";
+        } else {
+          analysis +=
+            "❌ Header Access-Control-Allow-Origin NÃO chegou ao cliente\n";
+        }
+
+        // Verificar ambiente
+        if (diagnosticData.environment) {
+          analysis += `\n📊 Ambiente:\n`;
+          analysis += `- Node.js: ${diagnosticData.environment.nodeVersion}\n`;
+          analysis += `- Vercel Env: ${diagnosticData.environment.vercelEnv}\n`;
+          analysis += `- Platform: ${diagnosticData.environment.platform}\n`;
+        }
+
+        // Conclusão
+        if (hasOriginHeader) {
+          analysis += "\n🎯 CONCLUSÃO: Headers CORS estão funcionando!";
+        } else if (diagnosticData.headers && diagnosticData.headers.match) {
+          analysis +=
+            "\n🚨 CONCLUSÃO: Vercel está removendo/bloqueando headers CORS após aplicação";
+        } else {
+          analysis +=
+            "\n🚨 CONCLUSÃO: Problema na aplicação de headers no código";
+        }
+
+        return analysis;
+      }
+
+      function clearResults() {
+        document.getElementById("results").innerHTML = "";
+      }
+
+      // Log inicial
+      window.addEventListener("load", () => {
+        console.log("🔬 Diagnóstico CORS carregado");
+        console.log("🌍 Origin:", window.location.origin);
+      });
+    </script>
+  </body>
+</html>

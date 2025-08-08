@@ -5,6 +5,7 @@ import { ProcessingSettings } from "@/components/ProcessingSettings";
 import { ImageList } from "@/components/ImageList";
 import { PaymentModal } from "@/components/PaymentModal";
 import MPesaTestDebug from "@/components/MPesaTestDebug";
+import MPesaInternalTestDebug from "@/components/MPesaInternalTestDebug";
 
 import {
   useImageProcessor,
@@ -166,8 +167,16 @@ const Index = () => {
 
       {/* Componente de Teste M-Pesa (temporário) */}
       {import.meta.env.DEV && (
-        <section className="container mx-auto px-6 py-8">
+        <section className="container mx-auto px-6 py-8 space-y-8">
           <MPesaTestDebug />
+
+          {/* Novo: Teste API M-Pesa Interna */}
+          <div>
+            <h2 className="text-2xl font-bold text-center mb-6">
+              🚀 Teste API M-Pesa Interna (Nova Implementação)
+            </h2>
+            <MPesaInternalTestDebug />
+          </div>
         </section>
       )}
 

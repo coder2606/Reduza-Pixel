@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { useMPesaPayment } from "./useMPesaPayment";
+import { useInternalMPesa } from "./useInternalMPesa";
 import {
   sendPaymentConfirmation,
   sendAdminPaymentNotification,
@@ -45,12 +45,12 @@ export const usePayment = () => {
     ((imageHashes: string[]) => void) | null
   >(null);
 
-  // Hook do servidor M-Pesa externo
+  // Hook da API M-Pesa interna (sem problemas CORS!)
   const {
-    processPayment: processExternalPayment,
-    loading: mpesaLoading,
+    processPayment: processInternalPayment,
+    isLoading: mpesaLoading,
     error: mpesaError,
-  } = useMPesaPayment();
+  } = useInternalMPesa();
 
   // Gerar session ID único
   function generateSessionId(): string {
@@ -172,17 +172,18 @@ export const usePayment = () => {
       reference: string,
       thirdPartyReference: string
     ) => {
-      // Processando pagamento via servidor M-Pesa externo
+      // Processando pagamento via API M-Pesa interna (sem problemas CORS!)
 
       try {
-        // Usar servidor M-Pesa externo reutilizável
-        const result = await processExternalPayment({
+        // Usar API M-Pesa interna
+        const result = await processInternalPayment({
           amount,
           customerMsisdn,
           reference,
+          thirdPartyReference,
         });
 
-        // Resposta recebida do servidor externo
+        // Resposta recebida da API interna
 
         // Retornar no formato esperado pelo código existente
         return {
@@ -194,14 +195,14 @@ export const usePayment = () => {
           error: result.error,
         };
       } catch (error) {
-        console.error("❌ Erro no pagamento via servidor externo:", error);
+        console.error("❌ Erro no pagamento via API interna:", error);
         return {
           success: false,
           error: error instanceof Error ? error.message : "Erro desconhecido",
         };
       }
     },
-    [processExternalPayment]
+    [processInternalPayment]
   );
 
   // Iniciar pagamento
