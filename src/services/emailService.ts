@@ -17,70 +17,15 @@ interface EmailResponse {
   message?: string;
 }
 
-// Base URLs (DEV: pode usar servidor local; PROD: usar Edge Functions do Supabase)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-
-// Derivar URL base das Edge Functions a partir do VITE_SUPABASE_URL
-// Ex.: https://xxxxxx.supabase.co -> https://xxxxxx.functions.supabase.co
-const SUPABASE_FUNCTIONS_BASE = (() => {
-  try {
-    const url = new URL(SUPABASE_URL);
-    const functionsHost = url.host.replace(".supabase.co", ".functions.supabase.co");
-    return `https://${functionsHost}`;
-  } catch {
-    return "";
-  }
-})();
-
-// Endpoint local opcional apenas em DEV (evita 404: se não configurado, usa Functions)
-const EMAIL_SERVER_URL = import.meta.env.DEV
-  ? (import.meta.env.VITE_EMAIL_SERVER_URL as string) || ""
-  : "";
-
-// Utilitário para chamar uma Edge Function do Supabase
-const callSupabaseFunction = async (path: string, init?: RequestInit) => {
-  if (!SUPABASE_FUNCTIONS_BASE) throw new Error("SUPABASE_FUNCTIONS_BASE não configurado");
-  const url = `${SUPABASE_FUNCTIONS_BASE}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (SUPABASE_ANON_KEY) {
-    headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
-    headers["apikey"] = SUPABASE_ANON_KEY;
-  }
-  const response = await fetch(url, {
-    method: "POST",
-    ...init,
-    headers: { ...headers, ...(init?.headers as any) },
-  });
-  return response;
-};
+// URL do servidor de email interno (serverless)
+const EMAIL_SERVER_URL = "/api";
 
 // Função para testar conexão com servidor SMTP
 export const testEmailConnection = async (): Promise<EmailResponse> => {
   try {
-    
-
-    // Em DEV: tenta servidor local se houver; caso contrário, usa Function de teste
-    if (EMAIL_SERVER_URL) {
-      const response = await fetch(`${EMAIL_SERVER_URL}/test-connection`, {
-        method: "GET",
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      const result = await response.json();
-      return { success: result.success, message: result.message || "Teste de conexão concluído" };
-    }
-
-    // PROD/sem local: chamar Edge Function de teste
-    const response = await fetch(`${SUPABASE_FUNCTIONS_BASE}/test-email-connection`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: SUPABASE_ANON_KEY ? `Bearer ${SUPABASE_ANON_KEY}` : "",
-        apikey: SUPABASE_ANON_KEY || "",
-      },
-      body: JSON.stringify({}),
+    // Usar o servidor Express local
+    const response = await fetch(`${EMAIL_SERVER_URL}/test-connection`, {
+      method: "GET",
     });
 
     if (!response.ok) {
@@ -88,7 +33,6 @@ export const testEmailConnection = async (): Promise<EmailResponse> => {
     }
 
     const result = await response.json();
-    
 
     return {
       success: result.success,
@@ -109,29 +53,19 @@ export const sendPaymentConfirmation = async (
   paymentData: PaymentData
 ): Promise<EmailResponse> => {
   try {
-    
-
-    const body = {
-      to,
-      subject: "Confirmação de Pagamento - Reduza Pixel",
-      type: "payment_confirmation",
-      paymentData,
-    };
-
-    let response: Response;
-    if (EMAIL_SERVER_URL) {
-      // DEV com servidor local
-      response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    } else {
-      // PROD (ou DEV sem local): Edge Function Supabase
-      response = await callSupabaseFunction("/send-email", {
-        body: JSON.stringify(body),
-      });
-    }
+    // Chamar servidor local de email
+    const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to,
+        subject: "Confirmação de Pagamento - Reduza Pixel",
+        type: "payment_confirmation",
+        paymentData,
+      }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -140,7 +74,6 @@ export const sendPaymentConfirmation = async (
     }
 
     const data = await response.json();
-    
 
     // Registrar atividade de email
     await logEmailActivity("success", {
@@ -172,29 +105,19 @@ export const sendAdminPaymentNotification = async (
   try {
     const adminEmail = "kobedesigner7@gmail.com";
 
-    
-
-    const body = {
-      to: adminEmail,
-      subject: `Nova Transação: ${paymentData.amount} MZN - ${paymentData.phoneNumber}`,
-      type: "admin_notification",
-      paymentData,
-    };
-
-    let response: Response;
-    if (EMAIL_SERVER_URL) {
-      // DEV com servidor local
-      response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    } else {
-      // PROD (ou DEV sem local): Edge Function Supabase
-      response = await callSupabaseFunction("/send-email", {
-        body: JSON.stringify(body),
-      });
-    }
+    // Chamar servidor local de email
+    const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: adminEmail,
+        subject: `Nova Transação: ${paymentData.amount} MZN - ${paymentData.phoneNumber}`,
+        type: "admin_notification",
+        paymentData,
+      }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -203,7 +126,6 @@ export const sendAdminPaymentNotification = async (
     }
 
     const data = await response.json();
-    
 
     // Registrar atividade de email
     await logEmailActivity("success", {
