@@ -146,7 +146,11 @@ module.exports = async (req, res) => {
           config: {
             mode: MPESA_CONFIG.mode,
             origin: MPESA_CONFIG.origin,
-            hasSecrets: !!(MPESA_CONFIG.apiKey && MPESA_CONFIG.publicKey && MPESA_CONFIG.serviceProviderCode),
+            hasSecrets: !!(
+              MPESA_CONFIG.apiKey &&
+              MPESA_CONFIG.publicKey &&
+              MPESA_CONFIG.serviceProviderCode
+            ),
           },
         };
         console.log("✅ Health check response:", healthData);
