@@ -204,16 +204,21 @@ module.exports = async (req, res) => {
         }
 
         // 🚀 Processar pagamento usando SDK oficial
-         // Configurar timeout para evitar 504 pendente
-         const controller = new AbortController();
-         const timeoutId = setTimeout(() => controller.abort(), 25000);
+        // Configurar timeout para evitar 504 pendente
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-         const sdkResponse = await mpesaInstance.c2bPayment({
-          amount: parseFloat(amount),
-          msisdn: customerMsisdn,
-          transactionReference: reference,
-          thirdPartyReference: thirdPartyReference,
-         }, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+        const sdkResponse = await mpesaInstance
+          .c2bPayment(
+            {
+              amount: parseFloat(amount),
+              msisdn: customerMsisdn,
+              transactionReference: reference,
+              thirdPartyReference: thirdPartyReference,
+            },
+            { signal: controller.signal }
+          )
+          .finally(() => clearTimeout(timeoutId));
 
         console.log("📡 Resposta do SDK M-Pesa:", sdkResponse);
 
@@ -272,14 +277,22 @@ module.exports = async (req, res) => {
         }
 
         const statusController = new AbortController();
-        const statusTimeoutId = setTimeout(() => statusController.abort(), 25000);
+        const statusTimeoutId = setTimeout(
+          () => statusController.abort(),
+          25000
+        );
 
-        const statusResponse = await mpesaInstance.queryTransactionStatus({
-          queryReference:
-            queryReference || transactionId || thirdPartyReference,
-          thirdPartyReference:
-            thirdPartyReference || transactionId || queryReference,
-        }, { signal: statusController.signal }).finally(() => clearTimeout(statusTimeoutId));
+        const statusResponse = await mpesaInstance
+          .queryTransactionStatus(
+            {
+              queryReference:
+                queryReference || transactionId || thirdPartyReference,
+              thirdPartyReference:
+                thirdPartyReference || transactionId || queryReference,
+            },
+            { signal: statusController.signal }
+          )
+          .finally(() => clearTimeout(statusTimeoutId));
 
         console.log("📊 Status da transação:", statusResponse);
 
@@ -323,10 +336,15 @@ module.exports = async (req, res) => {
         const nameController = new AbortController();
         const nameTimeoutId = setTimeout(() => nameController.abort(), 25000);
 
-        const nameResponse = await mpesaInstance.queryCustomerName({
-          msisdn: customerMsisdn,
-          thirdPartyReference: `NAME_${Date.now()}`,
-        }, { signal: nameController.signal }).finally(() => clearTimeout(nameTimeoutId));
+        const nameResponse = await mpesaInstance
+          .queryCustomerName(
+            {
+              msisdn: customerMsisdn,
+              thirdPartyReference: `NAME_${Date.now()}`,
+            },
+            { signal: nameController.signal }
+          )
+          .finally(() => clearTimeout(nameTimeoutId));
 
         return res.status(200).json({
           success: true,

@@ -150,31 +150,92 @@ export const sendAdminPaymentNotification = async (
   }
 };
 
-// Enviar email administrativo genérico (fallback ou erro de usuário)
-export const sendAdminGeneric = async (
-  subject: string,
-  html?: string,
-  text?: string
+// Função para notificar admin sobre falha crítica nos servidores M-Pesa
+export const sendCriticalErrorNotification = async (
+  phoneNumber: string,
+  amount: number,
+  internalError: string,
+  externalError: string
 ): Promise<EmailResponse> => {
   try {
     const adminEmail = "kobedesigner7@gmail.com";
+
+    const errorData = {
+      phoneNumber,
+      amount: amount.toString(),
+      timestamp: new Date().toLocaleString('pt-MZ'),
+      internalError,
+      externalError,
+      userId: phoneNumber,
+    };
+
     const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: adminEmail, subject, type: "custom", html, text }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: adminEmail,
+        subject: "🚨 CRÍTICO: Tentativa de Pagamento - Ambos Servidores Falharam",
+        type: "critical_error",
+        paymentData: errorData,
+      }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Erro ao enviar email genérico:", errorData);
-      return { success: false, error: errorData };
+      console.error("❌ Falha ao enviar email crítico:", response.status);
+      return { success: false, error: `HTTP ${response.status}` };
     }
 
-    await logEmailActivity("success", { recipient: adminEmail, type: "custom" });
+    console.log("✅ Email crítico enviado para admin");
     return { success: true };
   } catch (error) {
-    console.error("Erro ao enviar email genérico:", error);
-    await logEmailActivity("error", { error: String(error), recipient: "kobedesigner7@gmail.com", type: "custom" });
+    console.error("❌ Erro fatal ao enviar email crítico:", error);
+    return { success: false, error };
+  }
+};
+
+// Função para notificar admin sobre erro de usuário (dados inválidos, etc)
+export const sendUserErrorNotification = async (
+  phoneNumber: string,
+  amount: number,
+  errorType: string,
+  errorMessage: string
+): Promise<EmailResponse> => {
+  try {
+    const adminEmail = "kobedesigner7@gmail.com";
+
+    const errorData = {
+      phoneNumber,
+      amount: amount.toString(),
+      timestamp: new Date().toLocaleString('pt-MZ'),
+      errorType,
+      errorMessage,
+      userId: phoneNumber,
+    };
+
+    const response = await fetch(`${EMAIL_SERVER_URL}/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: adminEmail,
+        subject: `⚠️ Erro de Usuário: ${errorType} - ${phoneNumber}`,
+        type: "user_error",
+        paymentData: errorData,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("⚠️ Falha ao enviar email de erro de usuário:", response.status);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+
+    console.log("📧 Email de erro de usuário enviado para admin");
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Erro ao enviar email de erro de usuário:", error);
     return { success: false, error };
   }
 };

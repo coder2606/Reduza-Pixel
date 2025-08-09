@@ -4,6 +4,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import mpesaInternalService from "@/services/mpesaInternalService";
+import { sendCriticalErrorNotification, sendUserErrorNotification } from "@/services/emailService";
 
 interface MPesaPaymentData {
   amount: number;
@@ -40,6 +41,65 @@ interface UseInternalMPesaReturn {
   validatePhoneNumber: (msisdn: string) => boolean;
   clearError: () => void;
 }
+
+// Serviço M-Pesa externo como fallback
+const EXTERNAL_MPESA_URL = "https://mpesa-server-vercel.vercel.app";
+
+const tryExternalMPesa = async (paymentData: MPesaPaymentData): Promise<MPesaResponse> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(`${EXTERNAL_MPESA_URL}/api/mpesa/payment`, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...paymentData,
+        projectId: "reduza-pixel",
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log("🔄 Fallback externo funcionou:", result);
+    
+    return {
+      success: result.success,
+      data: result.data,
+      transactionId: result.transactionId,
+      conversationId: result.conversationId,
+      responseCode: result.responseCode,
+      responseDesc: result.responseDesc,
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
+// Função para detectar tipo de erro
+const isUserError = (error: string): boolean => {
+  const userErrorPatterns = [
+    "telefone.*inválido",
+    "dados.*obrigatórios",
+    "número.*formato",
+    "dados.*em falta",
+    "invalid phone",
+    "missing required",
+    "validation",
+  ];
+  return userErrorPatterns.some(pattern => 
+    error.toLowerCase().match(new RegExp(pattern, "i"))
+  );
+};
 
 export const useInternalMPesa = (): UseInternalMPesaReturn => {
   const [isLoading, setIsLoading] = useState(false);
@@ -79,53 +139,125 @@ export const useInternalMPesa = (): UseInternalMPesaReturn => {
     }
   }, []);
 
-  // Processar pagamento
+  // Processar pagamento com sistema de fallback robusto
   const processPayment = useCallback(
     async (paymentData: MPesaPaymentData): Promise<MPesaResponse> => {
       setIsLoading(true);
       setError(null);
 
+      let internalError = "";
+      let externalError = "";
+
       try {
-        console.log("💳 Processando pagamento via API interna...", {
+        // 🔍 Validação inicial (erro de usuário)
+        if (!mpesaInternalService.validatePhoneNumber(paymentData.customerMsisdn)) {
+          const userErrorMsg = "Número de telefone M-Pesa inválido. Use formato: 841234567 ou 851234567";
+          
+          // Enviar email de erro de usuário
+          await sendUserErrorNotification(
+            paymentData.customerMsisdn,
+            paymentData.amount,
+            "Número Inválido",
+            userErrorMsg
+          );
+          
+          throw new Error(userErrorMsg);
+        }
+
+        console.log("💳 Tentativa 1: Servidor interno...", {
           amount: paymentData.amount,
           reference: paymentData.reference,
         });
 
-        // Validar número de telefone antes de enviar
-        if (
-          !mpesaInternalService.validatePhoneNumber(paymentData.customerMsisdn)
-        ) {
-          throw new Error(
-            "Número de telefone M-Pesa inválido. Use formato: 841234567 ou 851234567"
-          );
+        // 🎯 TENTATIVA 1: Servidor Interno
+        try {
+          const result = await mpesaInternalService.processPayment(paymentData);
+          
+          if (result.success) {
+            console.log("✅ Servidor interno: SUCESSO!", result);
+            toast.success("Pagamento M-Pesa processado com sucesso!");
+            setLastResponse(result);
+            return result;
+          } else {
+            // Servidor respondeu mas com erro
+            internalError = result.error || result.responseDesc || "Erro interno não especificado";
+            throw new Error(internalError);
+          }
+        } catch (err) {
+          internalError = err instanceof Error ? err.message : "Erro desconhecido no servidor interno";
+          console.warn("⚠️ Servidor interno falhou:", internalError);
         }
 
-        const result = await mpesaInternalService.processPayment(paymentData);
+        // 🔄 TENTATIVA 2: Fallback para Servidor Externo
+        console.log("🔄 Tentativa 2: Servidor externo (fallback)...");
+        toast.info("Tentando servidor alternativo...");
 
-        setLastResponse(result);
-
-        if (result.success) {
-          console.log("✅ Pagamento processado com sucesso:", result);
-          toast.success("Pagamento M-Pesa processado com sucesso!");
-        } else {
-          console.warn("⚠️ Pagamento falhou:", result);
-          toast.error(
-            `Falha no pagamento: ${
-              result.responseDesc || result.error || "Erro desconhecido"
-            }`
-          );
+        try {
+          const externalResult = await tryExternalMPesa(paymentData);
+          
+          if (externalResult.success) {
+            console.log("✅ Servidor externo: SUCESSO! (fallback funcionou)", externalResult);
+            toast.success("Pagamento processado com sucesso via servidor alternativo!");
+            setLastResponse(externalResult);
+            return externalResult;
+          } else {
+            externalError = externalResult.error || externalResult.responseDesc || "Erro externo não especificado";
+            throw new Error(externalError);
+          }
+        } catch (err) {
+          externalError = err instanceof Error ? err.message : "Erro desconhecido no servidor externo";
+          console.error("❌ Servidor externo também falhou:", externalError);
         }
 
-        return result;
+        // 🚨 AMBOS OS SERVIDORES FALHARAM - CRÍTICO!
+        console.error("🚨 CRÍTICO: Ambos os servidores M-Pesa falharam!", {
+          interno: internalError,
+          externo: externalError,
+        });
+
+        // Enviar email crítico para admin
+        await sendCriticalErrorNotification(
+          paymentData.customerMsisdn,
+          paymentData.amount,
+          internalError,
+          externalError
+        );
+
+        const criticalErrorMsg = "Falha crítica: ambos os servidores de pagamento estão indisponíveis. Administrador foi notificado.";
+        toast.error(criticalErrorMsg);
+        setError(criticalErrorMsg);
+
+        const errorResponse: MPesaResponse = {
+          success: false,
+          error: criticalErrorMsg,
+        };
+
+        setLastResponse(errorResponse);
+        return errorResponse;
+
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido no pagamento";
-        console.error("❌ Erro no pagamento via API interna:", errorMessage);
+        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido no pagamento";
+        
+        // Verificar se é erro de usuário ou sistema
+        if (isUserError(errorMessage)) {
+          console.warn("⚠️ Erro de usuário detectado:", errorMessage);
+          
+          // Para erros de usuário que não passaram pela validação inicial
+          if (!errorMessage.includes("telefone")) {
+            await sendUserErrorNotification(
+              paymentData.customerMsisdn,
+              paymentData.amount,
+              "Dados Inválidos",
+              errorMessage
+            );
+          }
+        } else {
+          console.error("❌ Erro do sistema:", errorMessage);
+        }
 
         setError(errorMessage);
-        toast.error(`Erro no pagamento M-Pesa: ${errorMessage}`);
+        toast.error(`Erro no pagamento: ${errorMessage}`);
 
-        // Retornar resposta de erro padronizada
         const errorResponse: MPesaResponse = {
           success: false,
           error: errorMessage,
