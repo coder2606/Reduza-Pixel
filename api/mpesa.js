@@ -142,7 +142,12 @@ module.exports = async (req, res) => {
             mode: MPESA_CONFIG.mode,
             origin: MPESA_CONFIG.origin,
           },
-          config: MPESA_CONFIG,
+          // Nunca exponha segredos no health check
+          config: {
+            mode: MPESA_CONFIG.mode,
+            origin: MPESA_CONFIG.origin,
+            hasSecrets: !!(MPESA_CONFIG.apiKey && MPESA_CONFIG.publicKey && MPESA_CONFIG.serviceProviderCode),
+          },
         };
         console.log("✅ Health check response:", healthData);
         return res.status(200).json(healthData);
