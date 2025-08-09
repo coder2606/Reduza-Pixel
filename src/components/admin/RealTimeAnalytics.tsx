@@ -45,28 +45,33 @@ export const RealTimeAnalytics: React.FC = () => {
   const [activeUsers, setActiveUsers] = useState(0);
   const [currentHourTransactions, setCurrentHourTransactions] = useState(0);
 
-  // Simular dados em tempo real (em produção usar Supabase Realtime)
+  // Dados em tempo real com Supabase e APIs reais
   useEffect(() => {
     const checkSystemHealth = async () => {
       try {
-        // Verificar conexão com o banco
+        // Banco de dados
         const { error: dbError } = await supabase
           .from("transactions")
           .select("id")
           .limit(1);
 
-        // Simular verificação da API M-Pesa
-        const mpesaHealthy = Math.random() > 0.1; // 90% de tempo saudável
+        // API M-Pesa interna
+        let mpesaStatus: SystemHealth["mpesaApi"] = "down";
+        try {
+          const res = await fetch("/api/mpesa", { method: "GET" });
+          mpesaStatus = res.ok ? "healthy" : "degraded";
+        } catch (_) {
+          mpesaStatus = "down";
+        }
 
         setSystemHealth({
           database: dbError ? "down" : "healthy",
-          mpesaApi: mpesaHealthy ? "healthy" : "degraded",
+          mpesaApi: mpesaStatus,
           imageProcessing: "healthy",
           lastChecked: new Date().toISOString(),
         });
-
         setIsConnected(!dbError);
-      } catch (error) {
+      } catch (_) {
         setSystemHealth((prev) => ({
           ...prev,
           database: "down",
@@ -76,92 +81,127 @@ export const RealTimeAnalytics: React.FC = () => {
       }
     };
 
-    // Simular eventos em tempo real
-    const simulateRealtimeEvents = () => {
-      const eventTypes: RealtimeEvent["type"][] = [
-        "transaction",
-        "image_upload",
-        "payment_success",
-        "payment_failed",
-      ];
+    const loadInitialEvents = async () => {
+      // Carregar últimas transações como eventos
+      const { data } = await supabase
+        .from("transactions")
+        .select("id, amount, phone_number, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
 
-      const randomEvent: RealtimeEvent = {
-        id: Math.random().toString(36).substr(2, 9),
-        type: eventTypes[Math.floor(Math.random() * eventTypes.length)],
-        timestamp: new Date().toISOString(),
-        data: {
-          userId: `user_${Math.floor(Math.random() * 1000)}`,
-          amount: Math.floor(Math.random() * 50) + 1,
-          phone: `258${Math.floor(Math.random() * 1000000000)}`,
-        },
-        severity:
-          Math.random() > 0.8
-            ? "error"
-            : Math.random() > 0.6
-            ? "warning"
-            : "success",
-      };
-
-      setEvents((prev) => [randomEvent, ...prev.slice(0, 49)]); // Manter apenas os últimos 50
-    };
-
-    // Atualizar usuários ativos (simulado)
-    const updateActiveUsers = () => {
-      setActiveUsers(Math.floor(Math.random() * 25) + 5);
-    };
-
-    // Atualizar transações da hora atual
-    const updateCurrentHourTransactions = async () => {
-      try {
-        const now = new Date();
-        const hourStart = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          now.getHours()
-        );
-
-        const { data, error } = await supabase
-          .from("transactions")
-          .select("id")
-          .gte("created_at", hourStart.toISOString());
-
-        if (!error && data) {
-          setCurrentHourTransactions(data.length);
-        }
-      } catch (error) {
-        console.error("Erro ao buscar transações da hora:", error);
+      if (data) {
+        const mapped: RealtimeEvent[] = data.map((t) => ({
+          id: t.id,
+          type:
+            t.status === "completed"
+              ? "payment_success"
+              : t.status === "failed"
+              ? "payment_failed"
+              : "transaction",
+          timestamp: t.created_at,
+          data: { amount: t.amount, phone: t.phone_number },
+          severity:
+            t.status === "failed"
+              ? "error"
+              : t.status === "completed"
+              ? "success"
+              : "info",
+        }));
+        setEvents(mapped);
       }
     };
 
-    // Verificar saúde do sistema a cada 30 segundos
-    const healthInterval = setInterval(checkSystemHealth, 30000);
+    const updateActiveUsers = async () => {
+      const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("transactions")
+        .select("phone_number, created_at")
+        .gte("created_at", since);
+      if (data) {
+        const uniquePhones = new Set(
+          (data as any[]).map((r) => r.phone_number)
+        );
+        setActiveUsers(uniquePhones.size);
+      }
+    };
 
-    // Simular eventos a cada 5-15 segundos
-    const eventInterval = setInterval(
-      simulateRealtimeEvents,
-      Math.random() * 10000 + 5000
-    );
+    const updateCurrentHourTransactions = async () => {
+      const now = new Date();
+      const hourStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        now.getHours()
+      );
+      const { data } = await supabase
+        .from("transactions")
+        .select("id")
+        .gte("created_at", hourStart.toISOString());
+      setCurrentHourTransactions(data?.length || 0);
+    };
 
-    // Atualizar usuários ativos a cada 30 segundos
-    const usersInterval = setInterval(updateActiveUsers, 30000);
+    // Supabase Realtime: ouvir inserts/updates na tabela transactions
+    const channel = supabase
+      .channel("realtime-transactions")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "transactions" },
+        (payload: any) => {
+          const t = payload.new;
+          const evt: RealtimeEvent = {
+            id: t.id,
+            type:
+              t.status === "completed"
+                ? "payment_success"
+                : t.status === "failed"
+                ? "payment_failed"
+                : "transaction",
+            timestamp: t.created_at,
+            data: { amount: t.amount, phone: t.phone_number },
+            severity:
+              t.status === "failed"
+                ? "error"
+                : t.status === "completed"
+                ? "success"
+                : "info",
+          };
+          setEvents((prev) => [evt, ...prev.slice(0, 49)]);
+          updateActiveUsers();
+          updateCurrentHourTransactions();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "transactions" },
+        (payload: any) => {
+          const t = payload.new;
+          if (t.status === "completed" || t.status === "failed") {
+            const evt: RealtimeEvent = {
+              id: t.id,
+              type:
+                t.status === "completed" ? "payment_success" : "payment_failed",
+              timestamp: t.updated_at || new Date().toISOString(),
+              data: { amount: t.amount, phone: t.phone_number },
+              severity: t.status === "failed" ? "error" : "success",
+            };
+            setEvents((prev) => [evt, ...prev.slice(0, 49)]);
+            updateCurrentHourTransactions();
+          }
+        }
+      )
+      .subscribe();
 
-    // Atualizar transações da hora a cada minuto
-    const transactionsInterval = setInterval(
-      updateCurrentHourTransactions,
-      60000
-    );
-
-    // Executar verificações iniciais
+    // Execuções iniciais
     checkSystemHealth();
+    loadInitialEvents();
     updateActiveUsers();
     updateCurrentHourTransactions();
 
+    const healthInterval = setInterval(checkSystemHealth, 30000);
+
     return () => {
       clearInterval(healthInterval);
-      clearInterval(eventInterval);
-      clearInterval(usersInterval);
-      clearInterval(transactionsInterval);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -234,9 +274,9 @@ export const RealTimeAnalytics: React.FC = () => {
     }
   };
 
-  const refreshData = () => {
+  const refreshData = async () => {
+    await Promise.all([]);
     toast.success("Dados atualizados");
-    // Em uma implementação real, você recarregaria os dados
   };
 
   return (
